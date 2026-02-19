@@ -1,0 +1,138 @@
+.best-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  background-color: #f9fafb;
+  color: #111827;
+}
+
+.best-header {
+  text-align: center;
+  margin-top: 24px;
+}
+
+.best-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.best-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.best-error-block {
+  text-align: center;
+}
+
+.best-error {
+  color: red;
+}
+
+.best-retry-btn {
+  margin-top: 8px;
+  padding: 6px 20px;
+  border-radius: 999px;
+  border: none;
+  background: #3b82f6;
+  color: #fff;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.best-date-card {
+  padding: 24px 32px;
+  border-radius: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  text-align: center;
+  background-color: #ffffff;
+}
+
+.best-date-day {
+  font-size: 56px;
+  font-weight: 700;
+}
+
+.best-date-sub {
+  font-size: 14px;
+  font-weight: 500;
+  margin-top: 4px;
+  letter-spacing: 0.08em;
+}
+
+.best-emoji {
+  margin-top: 16px;
+  font-size: 32px;
+}
+
+.best-emoji--rain {
+  font-size: 48px;
+}
+
+.best-message {
+  max-width: 260px;
+  text-align: center;
+  margin-top: 8px;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.best-rain-stats {
+  margin-top: 16px;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.4;
+  text-align: center;
+  max-width: 260px;
+}
+
+.best-push-card {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: #ffffff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+}
+
+.best-push-card--loading {
+  cursor: default;
+}
+
+.best-push-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.best-push-text {
+  min-width: 0;
+}
+
+.best-push-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.best-push-desc {
+  margin-top: 2px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.best-push-checkbox {
+  pointer-events: none;
+}
+
+.best-push-status {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6b7280;
+  min-height: 16px;
+}

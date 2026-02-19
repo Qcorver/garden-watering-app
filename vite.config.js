@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
@@ -9,5 +10,8 @@ export default defineConfig({
     alias: {
       '@shared': path.resolve(__dirname, 'supabase/functions/_shared'),
     },
+  },
+  test: {
+    globals: true,
   },
 })

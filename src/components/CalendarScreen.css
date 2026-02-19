@@ -1,0 +1,164 @@
+.cal-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  background-color: #f9fafb;
+  color: #111827;
+}
+
+.cal-header {
+  text-align: center;
+  margin-top: 24px;
+}
+
+.cal-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.cal-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.cal-error-block {
+  text-align: center;
+}
+
+.cal-error {
+  color: red;
+  font-size: 14px;
+}
+
+.cal-retry-btn {
+  margin-top: 8px;
+  padding: 6px 20px;
+  border-radius: 999px;
+  border: none;
+  background: #3b82f6;
+  color: #fff;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.cal-loading {
+  text-align: center;
+  font-size: 14px;
+}
+
+/* Month navigation */
+.cal-month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 4px;
+}
+
+.cal-month-btn {
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.cal-month-label {
+  font-size: 16px;
+  font-weight: 500;
+  color: #111827;
+}
+
+/* Weekday header row */
+.cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* Days grid */
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* Individual day cell */
+.cal-day {
+  border-radius: 12px;
+  padding: 6px 4px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  background-color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 60px;
+  cursor: pointer;
+}
+
+.cal-day--watered {
+  background-color: #dbeafe;
+}
+
+.cal-day--recommended {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
+}
+
+.cal-day--outside-month {
+  opacity: 0.4;
+}
+
+.cal-day--future {
+  cursor: default;
+  opacity: 0.7;
+}
+
+/* Day number */
+.cal-day-number {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.cal-day--outside-month .cal-day-number {
+  color: #9ca3af;
+}
+
+.cal-day-number--today {
+  color: #dc2626;
+}
+
+/* Weather emoji */
+.cal-day-emoji {
+  font-size: 16px;
+  margin-top: 2px;
+}
+
+/* Badge row (watered / recommended icons) */
+.cal-day-badges {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+/* Legend */
+.cal-legend {
+  margin-top: 8px;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  font-size: 12px;
+  color: #6b7280;
+}

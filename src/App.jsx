@@ -74,7 +74,7 @@ export default function App() {
   // --- Hooks ---
   const { userId, ensureAuthUserId } = useAuth();
   const { pushEnabled, pushLoading, handleTogglePush } = usePushNotifications(userId, ensureAuthUserId);
-  const { advice, isLoading, error, dailyForecastNext5, historicalDailyRain } = useWeatherAdvice(locationName, lastWateredDate);
+  const { advice, isLoading, error, retry, dailyForecastNext5, historicalDailyRain } = useWeatherAdvice(locationName, lastWateredDate);
 
   // Sync location to Supabase so push-daily can look it up
   useEffect(() => {
@@ -130,6 +130,7 @@ export default function App() {
             advice={advice}
             isLoading={isLoading}
             error={error}
+            onRetry={retry}
             pushEnabled={pushEnabled}
             pushIsLoading={pushLoading}
             onTogglePush={handleTogglePush}
@@ -147,6 +148,7 @@ export default function App() {
             onMonthChange={setCurrentMonth}
             isLoading={isLoading}
             error={error}
+            onRetry={retry}
           />
         )}
 

@@ -10,6 +10,7 @@ import {
   isSameMonth,
   format,
 } from "date-fns";
+import "./CalendarScreen.css";
 
 /**
  * @param {Object} props
@@ -34,6 +35,7 @@ export function CalendarScreen({
   onMonthChange,
   isLoading,
   error,
+  onRetry,
 }) {
   const title = "Watering calendar";
 
@@ -142,7 +144,10 @@ export function CalendarScreen({
     return Boolean(wateringHistory[key]);
   };
 
+  const isFutureDay = (day) => day > today;
+
   const handleDayClick = (day) => {
+    if (isFutureDay(day)) return;
     onToggleWateredDay(day);
   };
 
@@ -157,115 +162,44 @@ export function CalendarScreen({
   const monthLabel = format(currentMonth, "MMMM yyyy");
 
   return (
-    <div
-      style={{
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        padding: "16px",
-        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-        backgroundColor: "#f9fafb",
-        color: "#111827",
-      }}
-    >
+    <div className="cal-screen">
       {/* Top: Title */}
-      <header style={{ textAlign: "center", marginTop: "24px" }}>
-        <h1 style={{ fontSize: "20px", fontWeight: 600 }}>{title}</h1>
+      <header className="cal-header">
+        <h1>{title}</h1>
       </header>
 
       {/* Middle: calendar content */}
-      <main
-        style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          gap: "12px",
-          marginTop: "16px",
-        }}
-      >
+      <main className="cal-main">
         {/* Month navigation */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            margin: "0 4px",
-          }}
-        >
-          <button
-            type="button"
-            onClick={handlePrevMonth}
-            style={{
-              border: "none",
-              background: "transparent",
-              fontSize: "20px",
-              padding: "4px 8px",
-              cursor: "pointer",
-            }}
-          >
+        <div className="cal-month-nav">
+          <button type="button" onClick={handlePrevMonth} className="cal-month-btn">
             ‹
           </button>
-          <div
-            style={{
-              fontSize: "16px",
-              fontWeight: 500,
-              color: "#111827",
-            }}
-          >
-            {monthLabel}
-          </div>
-          <button
-            type="button"
-            onClick={handleNextMonth}
-            style={{
-              border: "none",
-              background: "transparent",
-              fontSize: "20px",
-              padding: "4px 8px",
-              cursor: "pointer",
-            }}
-          >
+          <div className="cal-month-label">{monthLabel}</div>
+          <button type="button" onClick={handleNextMonth} className="cal-month-btn">
             ›
           </button>
         </div>
 
         {error && (
-          <p style={{ color: "red", textAlign: "center", fontSize: "14px" }}>
-            {error}
-          </p>
+          <div className="cal-error-block">
+            <p className="cal-error">{error}</p>
+            <button type="button" className="cal-retry-btn" onClick={onRetry}>
+              Retry
+            </button>
+          </div>
         )}
-        {isLoading && (
-          <p style={{ textAlign: "center", fontSize: "14px" }}>
-            Loading weather data…
-          </p>
-        )}
+        {isLoading && <p className="cal-loading">Loading weather data…</p>}
 
         {/* Weekday header */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(7, 1fr)",
-            gap: "4px",
-            marginTop: "4px",
-            fontSize: "11px",
-            color: "#6b7280",
-            textAlign: "center",
-          }}
-        >
+        <div className="cal-weekdays">
           {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
             <div key={d}>{d}</div>
           ))}
         </div>
 
         {/* Days grid */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(7, 1fr)",
-            gap: "6px",
-            marginTop: "4px",
-          }}
-        >
+        <div className="cal-grid">
           {days.map((day) => {
             const iso = format(day, "yyyy-MM-dd");
 
@@ -279,57 +213,38 @@ export function CalendarScreen({
               ? getHistoricalEmoji(historicalByDate[iso])
               : getWeatherEmoji(weatherByDate[iso]?.main);
 
+            const isFuture = isFutureDay(day);
+
+            const dayClasses = [
+              "cal-day",
+              watered && "cal-day--watered",
+              recommended && !watered && "cal-day--recommended",
+              !inCurrentMonth && "cal-day--outside-month",
+              isFuture && "cal-day--future",
+            ]
+              .filter(Boolean)
+              .join(" ");
+
+            const numberClasses = [
+              "cal-day-number",
+              isSameDay(day, today) && "cal-day-number--today",
+            ]
+              .filter(Boolean)
+              .join(" ");
+
             return (
               <button
                 key={iso}
                 type="button"
                 onClick={() => handleDayClick(day)}
-                style={{
-                  borderRadius: "12px",
-                  padding: "6px 4px",
-                  border: `1px solid ${
-                    recommended && !watered
-                      ? "#3b82f6"
-                      : "rgba(0,0,0,0.05)"
-                  }`,
-                  backgroundColor: watered ? "#dbeafe" : "#ffffff",
-                  boxShadow:
-                    recommended && !watered
-                      ? "0 0 0 1px rgba(59,130,246,0.3)"
-                      : "0 1px 3px rgba(0,0,0,0.04)",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  minHeight: "60px",
-                  cursor: "pointer",
-                  opacity: inCurrentMonth ? 1 : 0.4,
-                }}
+                disabled={isFuture}
+                className={dayClasses}
               >
-                <span
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: 600,
-                    color: isSameDay(day, today)
-                      ? "#dc2626" // red for today
-                      : inCurrentMonth
-                      ? "#111827"
-                      : "#9ca3af",
-                  }}
-                >
+                <span className={numberClasses}>
                   {format(day, "d")}
                 </span>
-                <span style={{ fontSize: "16px", marginTop: "2px" }}>
-                  {emoji}
-                </span>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "4px",
-                    marginTop: "2px",
-                    fontSize: "11px",
-                  }}
-                >
+                <span className="cal-day-emoji">{emoji}</span>
+                <div className="cal-day-badges">
                   {watered && <span>💧</span>}
                   {recommended && !watered && <span>⭐</span>}
                 </div>
@@ -339,16 +254,7 @@ export function CalendarScreen({
         </div>
 
         {/* Legend */}
-        <div
-          style={{
-            marginTop: "8px",
-            display: "flex",
-            justifyContent: "center",
-            gap: "16px",
-            fontSize: "12px",
-            color: "#6b7280",
-          }}
-        >
+        <div className="cal-legend">
           <span>⭐ Best day to water</span>
           <span>💧 You watered</span>
         </div>

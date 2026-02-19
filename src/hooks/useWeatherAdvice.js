@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { calculateWateringAdvice } from "@shared/wateringLogic";
 import {
   fetchForecastForCity,
@@ -14,6 +14,9 @@ export function useWeatherAdvice(locationName, lastWateredDate) {
 
   const [dailyForecastNext5, setDailyForecastNext5] = useState([]);
   const [historicalDailyRain, setHistoricalDailyRain] = useState([]);
+  const [retryCount, setRetryCount] = useState(0);
+
+  const retry = useCallback(() => setRetryCount((c) => c + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,7 +77,7 @@ export function useWeatherAdvice(locationName, lastWateredDate) {
     load();
 
     return () => { cancelled = true; };
-  }, [locationName, lastWateredDate]);
+  }, [locationName, lastWateredDate, retryCount]);
 
-  return { advice, isLoading, error, dailyForecastNext5, historicalDailyRain };
+  return { advice, isLoading, error, retry, dailyForecastNext5, historicalDailyRain };
 }

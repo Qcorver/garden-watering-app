@@ -1,5 +1,6 @@
 import React from "react";
 import { format } from "date-fns";
+import "./BestDayToWaterScreen.css";
 
 /**
  * @param {Object} props
@@ -7,6 +8,7 @@ import { format } from "date-fns";
  * @param {Object} props.advice   - result of calculateWateringAdvice
  * @param {boolean} props.isLoading
  * @param {string|null} props.error
+ * @param {() => void} props.onRetry
  * @param {boolean} props.pushEnabled
  * @param {boolean} props.pushIsLoading
  * @param {(nextEnabled: boolean) => void} props.onTogglePush
@@ -16,6 +18,7 @@ export function BestDayToWaterScreen({
   advice,
   isLoading,
   error,
+  onRetry,
   pushEnabled,
   pushIsLoading,
   onTogglePush,
@@ -40,44 +43,24 @@ export function BestDayToWaterScreen({
         }
       : null;
 
-  // You can still use this label if you want to show location somewhere in the future
-  const locationLabel =
-    location?.type === "current"
-      ? "Using current location"
-      : location?.name
-      ? `Using: ${location.name}`
-      : "No location selected";
-
   return (
-    <div
-      style={{
-        flex: 1,                     // 👈 fills available height given by App.jsx
-        display: "flex",
-        flexDirection: "column",
-        padding: "16px",
-        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-        backgroundColor: "#f9fafb",
-        color: "#111827",
-      }}
-    >
+    <div className="best-screen">
       {/* Top: Title */}
-      <header style={{ textAlign: "center", marginTop: "24px" }}>
-        <h1 style={{ fontSize: "20px", fontWeight: 600 }}>{title}</h1>
+      <header className="best-header">
+        <h1>{title}</h1>
       </header>
 
       {/* Middle: Main content */}
-      <main
-        style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "16px",
-        }}
-      >
+      <main className="best-main">
         {isLoading && <p>Loading weather data…</p>}
-        {error && <p style={{ color: "red" }}>{error}</p>}
+        {error && (
+          <div className="best-error-block">
+            <p className="best-error">{error}</p>
+            <button type="button" className="best-retry-btn" onClick={onRetry}>
+              Retry
+            </button>
+          </div>
+        )}
 
         {!isLoading && !error && advice && (
           <>
@@ -85,68 +68,32 @@ export function BestDayToWaterScreen({
               <>
                 {/* Big date card */}
                 {formattedDate && (
-                  <div
-                    style={{
-                      padding: "24px 32px",
-                      borderRadius: "24px",
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
-                      textAlign: "center",
-                      backgroundColor: "#ffffff",
-                    }}
-                  >
-                    <div style={{ fontSize: "56px", fontWeight: 700 }}>
+                  <div className="best-date-card">
+                    <div className="best-date-day">
                       {formattedDate.day}
                     </div>
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: 500,
-                        marginTop: "4px",
-                        letterSpacing: "0.08em",
-                      }}
-                    >
+                    <div className="best-date-sub">
                       {formattedDate.month} · {formattedDate.weekday}
                     </div>
                   </div>
                 )}
 
                 {/* Watering can placeholder */}
-                <div style={{ marginTop: "16px", fontSize: "32px" }}>
-                  💧🫙
-                </div>
+                <div className="best-emoji">💧🫙</div>
               </>
             ) : (
               <>
                 {/* Rain cloud visual */}
-                <div style={{ fontSize: "48px" }}>🌧️</div>
+                <div className="best-emoji--rain">🌧️</div>
               </>
             )}
 
             {/* Message */}
-            <p
-              style={{
-                maxWidth: "260px",
-                textAlign: "center",
-                marginTop: "8px",
-                fontSize: "14px",
-                color: "#4b5563",
-              }}
-            >
-              {message}
-            </p>
+            <p className="best-message">{message}</p>
 
-            {/* Debug info */}
+            {/* Rain stats */}
             {advice && (
-              <div
-                style={{
-                  marginTop: "16px",
-                  fontSize: "12px",
-                  color: "#6b7280",
-                  lineHeight: "1.4",
-                  textAlign: "center",
-                  maxWidth: "260px",
-                }}
-              >
+              <div className="best-rain-stats">
                 <div>
                   <strong>Rain last 7 days:</strong>{" "}
                   {rainLast7?.toFixed(1)} mm
@@ -161,7 +108,7 @@ export function BestDayToWaterScreen({
         )}
       </main>
 
-      {/* Push notifications toggle (tappable card; sits above the location area rendered in App.jsx) */}
+      {/* Push notifications toggle */}
       <div
         role="button"
         aria-pressed={!!pushEnabled}
@@ -169,63 +116,30 @@ export function BestDayToWaterScreen({
           if (pushIsLoading) return;
           onTogglePush?.(!pushEnabled);
         }}
-        style={{
-          marginTop: "12px",
-          padding: "12px",
-          borderRadius: "16px",
-          backgroundColor: "#ffffff",
-          boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
-          cursor: pushIsLoading ? "default" : "pointer",
-        }}
+        className={`best-push-card${pushIsLoading ? " best-push-card--loading" : ""}`}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "12px",
-          }}
-        >
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: "14px", fontWeight: 700 }}>
-              Push notifications
-            </div>
-            <div
-              style={{
-                marginTop: "2px",
-                fontSize: "13px",
-                color: "#6b7280",
-              }}
-            >
-              Get a reminder when it’s the best time to water.
+        <div className="best-push-row">
+          <div className="best-push-text">
+            <div className="best-push-title">Push notifications</div>
+            <div className="best-push-desc">
+              Get a reminder when it's the best time to water.
             </div>
           </div>
 
-        <input
-  type="checkbox"
-  checked={!!pushEnabled}
-  disabled={!!pushIsLoading}
-  readOnly
-  aria-label="Enable push notifications"
-  style={{ pointerEvents: "none" }}
-/>
+          <input
+            type="checkbox"
+            checked={!!pushEnabled}
+            disabled={!!pushIsLoading}
+            readOnly
+            aria-label="Enable push notifications"
+            className="best-push-checkbox"
+          />
         </div>
       </div>
 
-      <div
-        aria-live="polite"
-        style={{
-          marginTop: "6px",
-          fontSize: "12px",
-          color: "#6b7280",
-          minHeight: "16px",
-        }}
-      >
+      <div aria-live="polite" className="best-push-status">
         {pushIsLoading ? "Saving…" : ""}
       </div>
-
-      {/* ⛔️ OLD FOOTER REMOVED
-          The LocationPicker in App.jsx now renders the footer UI. */}
     </div>
   );
 }

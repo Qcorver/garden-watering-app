@@ -1,0 +1,94 @@
+.loc-footer {
+  margin-top: auto;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  font-size: 0.9rem;
+}
+
+.loc-title {
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.loc-gps-btn {
+  width: 100%;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  border: none;
+  background: #10b981;
+  color: #fff;
+  font-weight: 500;
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+}
+
+.loc-gps-error {
+  color: #b91c1c;
+  font-size: 0.8rem;
+  margin-bottom: 0.4rem;
+}
+
+.loc-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.loc-input-wrap {
+  position: relative;
+  flex: 1;
+}
+
+.loc-input {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+}
+
+.loc-search-status {
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.loc-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 2.35rem;
+  z-index: 20;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.loc-dropdown-item {
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  border: none;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.loc-submit-btn {
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  border: none;
+  background: #3b82f6;
+  color: #fff;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.loc-current {
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: #6b7280;
+}

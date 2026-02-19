@@ -1,6 +1,7 @@
 // src/components/LocationPicker.jsx
 import React, { useEffect, useRef, useState } from "react";
 import { searchLocations, reverseGeocode } from "../api/openWeatherClient";
+import "./LocationPicker.css";
 
 export default function LocationPicker({ locationName, onLocationChange }) {
   const [manualInput, setManualInput] = useState("");
@@ -121,49 +122,24 @@ export default function LocationPicker({ locationName, onLocationChange }) {
   }
 
   return (
-    <footer
-      style={{
-        marginTop: "auto",
-        padding: "0.75rem 1rem",
-        borderTop: "1px solid #e5e7eb",
-        background: "#f9fafb",
-        fontSize: "0.9rem",
-      }}
-    >
-      <div style={{ marginBottom: "0.5rem", fontWeight: 600 }}>Location</div>
+    <footer className="loc-footer">
+      <div className="loc-title">Location</div>
 
       {/* Current location button */}
       <button
         type="button"
         onClick={handleUseCurrentLocation}
         disabled={isLocating}
-        style={{
-          width: "100%",
-          padding: "0.45rem 0.8rem",
-          borderRadius: "999px",
-          border: "none",
-          background: "#10b981",
-          color: "#fff",
-          fontWeight: 500,
-          cursor: "pointer",
-          marginBottom: "0.5rem",
-        }}
+        className="loc-gps-btn"
       >
         {isLocating ? "Detecting current location..." : "Use my current location"}
       </button>
 
-      {gpsError && (
-        <p style={{ color: "#b91c1c", fontSize: "0.8rem", marginBottom: "0.4rem" }}>
-          {gpsError}
-        </p>
-      )}
+      {gpsError && <p className="loc-gps-error">{gpsError}</p>}
 
       {/* Manual input */}
-      <form
-        onSubmit={handleSubmit}
-        style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}
-      >
-        <div style={{ position: "relative", flex: 1 }}>
+      <form onSubmit={handleSubmit} className="loc-form">
+        <div className="loc-input-wrap">
           <input
             type="text"
             placeholder="e.g. Amsterdam"
@@ -176,50 +152,24 @@ export default function LocationPicker({ locationName, onLocationChange }) {
               // allow click selection before closing
               setTimeout(() => setIsDropdownOpen(false), 150);
             }}
-            style={{
-              width: "100%",
-              padding: "0.4rem 0.6rem",
-              borderRadius: "999px",
-              border: "1px solid #d1d5db",
-            }}
+            className="loc-input"
           />
 
           {(isSearching || searchError) && (
-            <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#6b7280" }}>
+            <div className="loc-search-status">
               {isSearching ? "Searching…" : searchError ? `⚠️ ${searchError}` : null}
             </div>
           )}
 
           {isDropdownOpen && options.length > 0 && (
-            <div
-              style={{
-                position: "absolute",
-                left: 0,
-                right: 0,
-                top: "2.35rem",
-                zIndex: 20,
-                background: "#fff",
-                border: "1px solid #e5e7eb",
-                borderRadius: "12px",
-                boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
-                overflow: "hidden",
-              }}
-            >
+            <div className="loc-dropdown">
               {options.map((opt) => (
                 <button
                   key={`${opt.value}-${opt.lat}-${opt.lon}`}
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => handleSelectOption(opt)}
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "0.55rem 0.75rem",
-                    border: "none",
-                    background: "#fff",
-                    cursor: "pointer",
-                    fontSize: "0.9rem",
-                  }}
+                  className="loc-dropdown-item"
                 >
                   {opt.label}
                 </button>
@@ -227,30 +177,12 @@ export default function LocationPicker({ locationName, onLocationChange }) {
             </div>
           )}
         </div>
-        <button
-          type="submit"
-          style={{
-            padding: "0.4rem 0.9rem",
-            borderRadius: "999px",
-            border: "none",
-            background: "#3b82f6",
-            color: "#fff",
-            fontWeight: 500,
-            cursor: "pointer",
-            whiteSpace: "nowrap",
-          }}
-        >
+        <button type="submit" className="loc-submit-btn">
           Set
         </button>
       </form>
 
-      <p
-        style={{
-          marginTop: "0.4rem",
-          fontSize: "0.8rem",
-          color: "#6b7280",
-        }}
-      >
+      <p className="loc-current">
         Using: <strong>{locationName}</strong>
       </p>
     </footer>
