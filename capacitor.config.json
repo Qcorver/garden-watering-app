@@ -1,0 +1,10 @@
+{
+  "appId": "com.qcorver.whentowater",
+  "appName": "WhenToWater",
+  "webDir": "dist",
+  "server": {
+    "allowNavigation": [
+      "*.supabase.co"
+    ]
+  }
+}

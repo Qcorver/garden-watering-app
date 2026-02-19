@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">WhenToWater</string>
+    <string name="title_activity_main">WhenToWater</string>
+    <string name="package_name">com.qcorver.whentowater</string>
+    <string name="custom_url_scheme">com.qcorver.whentowater</string>
+</resources>
