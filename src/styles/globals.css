@@ -14,9 +14,9 @@ body {
 body {
   margin: 0;
   padding: 0;
-  background-color: #f9fafb;
-  color: #111827;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: #f0f4ec;
+  color: #1a3d1a;
+  font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   min-height: 100dvh;
 }
 
@@ -47,18 +47,54 @@ body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 16px;
+  padding: 0;
 }
 
+/* Tab bar */
 .tabs {
   position: sticky;
   bottom: 0;
-  background: #ffffff;
-  border-top: 1px solid #e5e7eb;
-
-  /* Strong vertical lift above home indicator */
-  padding: 16px 16px calc(48px + var(--safe-bottom));
-
-  /* Optional: visually separate from content */
+  background: rgba(240, 244, 236, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 8px 16px calc(12px + var(--safe-bottom));
+  display: flex;
+  justify-content: space-around;
+  z-index: 50;
   box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.04);
+}
+
+.tab-bar-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  flex: 1;
+  padding: 8px 0;
+  border-radius: 14px;
+  transition: background 0.2s;
+}
+
+.tab-bar-button--active {
+  background: rgba(61, 122, 61, 0.1);
+}
+
+.tab-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.tab-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #9aab94;
+}
+
+.tab-bar-button--active .tab-label {
+  color: #3d7a3d;
 }

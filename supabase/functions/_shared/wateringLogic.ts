@@ -118,11 +118,18 @@ export function calculateWateringAdvice({
   };
 
   // --- 0) Wet-soil gate: recent rain means no watering ---
+  // Thresholds scale with seasonFactor: in winter soil stays wet with less rain
+  // (lower evapotranspiration), in summer it dries out faster and needs more rain to stay moist.
+  const scaledWet48hMm = WET_48H_MM * seasonFactor;
+  const scaledWet72hMm = WET_72H_MM * seasonFactor;
+  const scaledWet5dMm = WET_5D_MM * seasonFactor;
+  const scaledBigRainDayMm = BIG_RAIN_DAY_MM * seasonFactor;
+
   if (
-    _rainLast2 >= WET_48H_MM ||
-    _rainLast3 >= WET_72H_MM ||
-    _rainLast5 >= WET_5D_MM ||
-    _maxDailyRain >= BIG_RAIN_DAY_MM
+    _rainLast2 >= scaledWet48hMm ||
+    _rainLast3 >= scaledWet72hMm ||
+    _rainLast5 >= scaledWet5dMm ||
+    _maxDailyRain >= scaledBigRainDayMm
   ) {
     return {
       shouldWater: false,

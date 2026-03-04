@@ -9,6 +9,8 @@ npm run dev       # Start Vite dev server with HMR
 npm run build     # Production build (output: dist/)
 npm run lint      # ESLint
 npm run preview   # Preview production build locally
+npm test          # Run Vitest once
+npm run test:watch # Vitest watch mode
 ```
 
 **Capacitor (mobile):**
@@ -72,3 +74,6 @@ Four tables, all gated by `auth.uid()`:
 - Capacitor app ID: `com.qcorver.whentowater`
 - CSS uses `env(safe-area-inset-*)` for iOS notch/home bar support
 - Date formatting uses `date-fns`
+- The Supabase anon key in `.env.local` must be the JWT format (`eyJ...`), not the `sb_publishable_` format — Edge Functions require JWT for `Authorization: Bearer` headers
+- Tests live in `src/__tests__/` (Vitest with globals enabled)
+- Edge Function secrets can be listed with `supabase secrets list` (CLI must be authenticated)

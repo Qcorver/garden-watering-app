@@ -1,5 +1,5 @@
 export async function fetchRainHistory(lat, lon) {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=7&daily=rain_sum&timezone=auto`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=7&forecast_days=0&daily=rain_sum&timezone=auto`;
 
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch historical rain data (${res.status})`);
@@ -22,7 +22,7 @@ export async function fetchRainHistory(lat, lon) {
  * Returns: [{ date: Date, rainMm: number }]
  */
 export async function fetchDailyRainHistory(lat, lon, pastDays = 30) {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=${pastDays}&daily=rain_sum&timezone=auto`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=${pastDays}&forecast_days=0&daily=rain_sum&timezone=auto`;
 
   const res = await fetch(url);
   if (!res.ok) {

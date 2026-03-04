@@ -8,6 +8,7 @@ import {
   addMonths,
   isSameDay,
   isSameMonth,
+  isToday,
   format,
 } from "date-fns";
 import "./CalendarScreen.css";
@@ -37,100 +38,71 @@ export function CalendarScreen({
   error,
   onRetry,
 }) {
-  const title = "Watering calendar";
-
-  // Start-of-today (local time) for comparing past vs future days
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
+  // Navigation bounds: 1 month back, current month max
+  const minMonth = startOfMonth(addMonths(today, -1));
+  const maxMonth = startOfMonth(today);
+  const canGoPrev = currentMonth > minMonth;
+  const canGoNext = currentMonth < maxMonth;
+
   // Historical lookup map (YYYY-MM-DD -> item)
   const historicalByDate = React.useMemo(() => {
-    if (!historicalDailyRain || historicalDailyRain.length === 0) {
-      return {};
-    }
+    if (!historicalDailyRain || historicalDailyRain.length === 0) return {};
     const map = {};
     historicalDailyRain.forEach((item) => {
-      const dateObj =
-        item.date instanceof Date ? item.date : new Date(item.date);
+      const dateObj = item.date instanceof Date ? item.date : new Date(item.date);
       const key = format(dateObj, "yyyy-MM-dd");
-      map[key] = {
-        ...item,
-        date: dateObj,
-      };
+      map[key] = { ...item, date: dateObj };
     });
     return map;
   }, [historicalDailyRain]);
 
-  // Calendar range (full weeks shown)
+  // Calendar range (full weeks, Monday start)
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
-  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 }); // Monday
+  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
   const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
-
   const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
   // Forecast lookup map (YYYY-MM-DD -> item)
   const weatherByDate = React.useMemo(() => {
-    if (!dailyForecastNext5 || dailyForecastNext5.length === 0) {
-      return {};
-    }
-
+    if (!dailyForecastNext5 || dailyForecastNext5.length === 0) return {};
     const map = {};
     dailyForecastNext5.forEach((item) => {
-      const dateObj =
-        item.date instanceof Date ? item.date : new Date(item.date);
+      const dateObj = item.date instanceof Date ? item.date : new Date(item.date);
       const key = format(dateObj, "yyyy-MM-dd");
-
       const main =
         item.main ||
         item.weatherMain ||
         (item.weather && item.weather[0] && item.weather[0].main) ||
         null;
-
-      map[key] = {
-        ...item,
-        date: dateObj,
-        main,
-      };
+      map[key] = { ...item, date: dateObj, main };
     });
-
     return map;
   }, [dailyForecastNext5]);
 
   const getWeatherEmoji = (main) => {
-    if (!main) return "·";
+    if (!main) return null;
     switch (main) {
-      case "Clear":
-        return "☀️";
-      case "Clouds":
-        return "☁️";
+      case "Clear": return "☀️";
+      case "Clouds": return "⛅";
       case "Drizzle":
-      case "Rain":
-        return "🌧️";
-      case "Thunderstorm":
-        return "⛈️";
-      case "Snow":
-        return "❄️";
-      default:
-        return "🌦️";
+      case "Rain": return "🌧️";
+      case "Thunderstorm": return "⛈️";
+      case "Snow": return "❄️";
+      default: return "🌦️";
     }
   };
 
-  // Cloud cover threshold (%) to decide ☁️ vs ☀️ on historical dry days
   const CLOUDY_THRESHOLD = 60;
-
   const getHistoricalEmoji = (hist) => {
-    if (!hist) return "·";
+    if (!hist) return null;
     const rainMm = Number(hist.rainMm ?? 0);
-
     if (rainMm > 0) return "🌧️";
-
     const cloud = hist.cloudCoverMean;
-    if (typeof cloud === "number") {
-      return cloud >= CLOUDY_THRESHOLD ? "☁️" : "☀️";
-    }
-
-    // If we have rain data but no cloud data, default to sun
+    if (typeof cloud === "number") return cloud >= CLOUDY_THRESHOLD ? "☁️" : "☀️";
     return "☀️";
   };
 
@@ -139,11 +111,7 @@ export function CalendarScreen({
     return isSameDay(day, advice.bestWateringDate);
   };
 
-  const isWateredDay = (day) => {
-    const key = format(day, "yyyy-MM-dd");
-    return Boolean(wateringHistory[key]);
-  };
-
+  const isWateredDay = (day) => Boolean(wateringHistory[format(day, "yyyy-MM-dd")]);
   const isFutureDay = (day) => day > today;
 
   const handleDayClick = (day) => {
@@ -152,34 +120,48 @@ export function CalendarScreen({
   };
 
   const handlePrevMonth = () => {
-    onMonthChange(addMonths(currentMonth, -1));
+    if (canGoPrev) onMonthChange(addMonths(currentMonth, -1));
   };
-
   const handleNextMonth = () => {
-    onMonthChange(addMonths(currentMonth, 1));
+    if (canGoNext) onMonthChange(addMonths(currentMonth, 1));
   };
-
-  const monthLabel = format(currentMonth, "MMMM yyyy");
 
   return (
     <div className="cal-screen">
-      {/* Top: Title */}
-      <header className="cal-header">
-        <h1>{title}</h1>
-      </header>
 
-      {/* Middle: calendar content */}
-      <main className="cal-main">
-        {/* Month navigation */}
+      {/* ── HEADER ── */}
+      <div className="cal-header">
+        <div className="cal-header-app-title">🌿 Garden Watering</div>
+        <div className="cal-header-title">Watering<br />Calendar</div>
+        <div className="cal-header-subtitle">{format(currentMonth, "MMMM yyyy")}</div>
+
         <div className="cal-month-nav">
-          <button type="button" onClick={handlePrevMonth} className="cal-month-btn">
-            ‹
-          </button>
-          <div className="cal-month-label">{monthLabel}</div>
-          <button type="button" onClick={handleNextMonth} className="cal-month-btn">
-            ›
-          </button>
+          <div className="cal-month-name">{format(currentMonth, "MMMM yyyy")}</div>
+          <div className="cal-nav-buttons">
+            <button
+              type="button"
+              onClick={handlePrevMonth}
+              disabled={!canGoPrev}
+              className="cal-nav-btn"
+              aria-label="Previous month"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={handleNextMonth}
+              disabled={!canGoNext}
+              className="cal-nav-btn"
+              aria-label="Next month"
+            >
+              ›
+            </button>
+          </div>
         </div>
+      </div>
+
+      {/* ── BODY ── */}
+      <div className="cal-body">
 
         {error && (
           <div className="cal-error-block">
@@ -193,8 +175,8 @@ export function CalendarScreen({
 
         {/* Weekday header */}
         <div className="cal-weekdays">
-          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-            <div key={d}>{d}</div>
+          {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => (
+            <div key={d} className="cal-weekday">{d}</div>
           ))}
         </div>
 
@@ -202,32 +184,29 @@ export function CalendarScreen({
         <div className="cal-grid">
           {days.map((day) => {
             const iso = format(day, "yyyy-MM-dd");
-
             const inCurrentMonth = isSameMonth(day, currentMonth);
             const watered = isWateredDay(day);
             const recommended = isBestWateringDay(day);
-
+            const todayDay = isToday(day);
             const isPastDay = day < today;
+            const futureDay = isFutureDay(day);
+            const hasWeather = isPastDay
+              ? Boolean(historicalByDate[iso])
+              : Boolean(weatherByDate[iso]);
+            const noData = futureDay && !hasWeather;
 
             const emoji = isPastDay
               ? getHistoricalEmoji(historicalByDate[iso])
               : getWeatherEmoji(weatherByDate[iso]?.main);
 
-            const isFuture = isFutureDay(day);
-
-            const dayClasses = [
+            // Cell class priority: watered > today > best > no-data > other-month > normal
+            const cellClass = [
               "cal-day",
               watered && "cal-day--watered",
-              recommended && !watered && "cal-day--recommended",
-              !inCurrentMonth && "cal-day--outside-month",
-              isFuture && "cal-day--future",
-            ]
-              .filter(Boolean)
-              .join(" ");
-
-            const numberClasses = [
-              "cal-day-number",
-              isSameDay(day, today) && "cal-day-number--today",
+              !watered && todayDay && "cal-day--today",
+              !watered && !todayDay && recommended && "cal-day--best",
+              noData && !watered && "cal-day--no-data",
+              !inCurrentMonth && "cal-day--other-month",
             ]
               .filter(Boolean)
               .join(" ");
@@ -237,17 +216,12 @@ export function CalendarScreen({
                 key={iso}
                 type="button"
                 onClick={() => handleDayClick(day)}
-                disabled={isFuture}
-                className={dayClasses}
+                disabled={futureDay}
+                className={cellClass}
               >
-                <span className={numberClasses}>
-                  {format(day, "d")}
-                </span>
-                <span className="cal-day-emoji">{emoji}</span>
-                <div className="cal-day-badges">
-                  {watered && <span>💧</span>}
-                  {recommended && !watered && <span>⭐</span>}
-                </div>
+                <span className="cal-day-num">{format(day, "d")}</span>
+                {emoji && <span className="cal-day-icon">{emoji}</span>}
+                {!emoji && !noData && <span className="cal-day-icon">·</span>}
               </button>
             );
           })}
@@ -255,10 +229,20 @@ export function CalendarScreen({
 
         {/* Legend */}
         <div className="cal-legend">
-          <span>⭐ Best day to water</span>
-          <span>💧 You watered</span>
+          <div className="cal-legend-item">
+            <div className="cal-legend-dot cal-legend-dot--today" />
+            <span className="cal-legend-label">Today</span>
+          </div>
+          <div className="cal-legend-item">
+            <div className="cal-legend-dot cal-legend-dot--best" />
+            <span className="cal-legend-label">Best day</span>
+          </div>
+          <div className="cal-legend-item">
+            <div className="cal-legend-dot cal-legend-dot--watered" />
+            <span className="cal-legend-label">You watered</span>
+          </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

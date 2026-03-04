@@ -4,7 +4,6 @@ import { format, isAfter, parseISO } from "date-fns";
 
 import { BestDayToWaterScreen } from "./components/BestDayToWaterScreen";
 import { CalendarScreen } from "./components/CalendarScreen";
-import LocationPicker from "./components/LocationPicker";
 
 import { useAuth } from "./hooks/useAuth";
 import { usePushNotifications } from "./hooks/usePushNotifications";
@@ -90,7 +89,7 @@ export default function App() {
         const { error: upsertError } = await supabase
           .from("user_location")
           .upsert(
-            { user_id: userId, lat, lon },
+            { user_id: userId, name: locationName, lat, lon },
             { onConflict: "user_id" }
           );
 
@@ -127,7 +126,10 @@ export default function App() {
         {activeTab === "best" && (
           <BestDayToWaterScreen
             location={location}
+            locationName={locationName}
+            onLocationChange={handleLocationChange}
             advice={advice}
+            dailyForecastNext5={dailyForecastNext5}
             isLoading={isLoading}
             error={error}
             onRetry={retry}
@@ -151,11 +153,6 @@ export default function App() {
             onRetry={retry}
           />
         )}
-
-        <LocationPicker
-          locationName={locationName}
-          onLocationChange={handleLocationChange}
-        />
       </main>
 
       <nav className="tab-bar tabs">
@@ -168,7 +165,8 @@ export default function App() {
           }
           onClick={() => setActiveTab("best")}
         >
-          Best day
+          <span className="tab-icon">☀️</span>
+          <span className="tab-label">Best Day</span>
         </button>
         <button
           type="button"
@@ -179,7 +177,8 @@ export default function App() {
           }
           onClick={() => setActiveTab("calendar")}
         >
-          Calendar
+          <span className="tab-icon">📅</span>
+          <span className="tab-label">Calendar</span>
         </button>
       </nav>
     </div>

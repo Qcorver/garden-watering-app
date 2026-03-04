@@ -84,40 +84,42 @@ describe("calculateWateringAdvice", () => {
   // In July: seasonFactor=1.2, weeklyTarget=24
 
   describe("wet-soil gates", () => {
-    it("blocks watering when rainLast2Days >= WET_48H_MM", () => {
+    // Tests pinned to July (seasonFactor=1.2), so scaled thresholds = constant * 1.2
+    it("blocks watering when rainLast2Days >= WET_48H_MM * seasonFactor", () => {
       const result = calculateWateringAdvice(
-        dryInputs({ rainLast2Days: WET_48H_MM })
+        dryInputs({ rainLast2Days: WET_48H_MM * 1.2 })
       );
       expect(result.shouldWater).toBe(false);
       expect(result.noWaterReason).toBe("recent_rain");
       expect(result.message).toContain("still wet");
     });
 
-    it("blocks watering when rainLast3Days >= WET_72H_MM", () => {
+    it("blocks watering when rainLast3Days >= WET_72H_MM * seasonFactor", () => {
       const result = calculateWateringAdvice(
-        dryInputs({ rainLast3Days: WET_72H_MM })
+        dryInputs({ rainLast3Days: WET_72H_MM * 1.2 })
       );
       expect(result.shouldWater).toBe(false);
       expect(result.noWaterReason).toBe("recent_rain");
     });
 
-    it("blocks watering when rainLast5Days >= WET_5D_MM", () => {
+    it("blocks watering when rainLast5Days >= WET_5D_MM * seasonFactor", () => {
       const result = calculateWateringAdvice(
-        dryInputs({ rainLast5Days: WET_5D_MM })
+        dryInputs({ rainLast5Days: WET_5D_MM * 1.2 })
       );
       expect(result.shouldWater).toBe(false);
       expect(result.noWaterReason).toBe("recent_rain");
     });
 
-    it("blocks watering when maxDailyRainLast7 >= BIG_RAIN_DAY_MM", () => {
+    it("blocks watering when maxDailyRainLast7 >= BIG_RAIN_DAY_MM * seasonFactor", () => {
       const result = calculateWateringAdvice(
-        dryInputs({ maxDailyRainLast7: BIG_RAIN_DAY_MM })
+        dryInputs({ maxDailyRainLast7: BIG_RAIN_DAY_MM * 1.2 })
       );
       expect(result.shouldWater).toBe(false);
       expect(result.noWaterReason).toBe("recent_rain");
     });
 
-    it("does NOT block when values are just below thresholds", () => {
+    it("does NOT block when values are just below scaled thresholds", () => {
+      // WET_*_MM - 0.1 is below WET_*_MM * 1.2 for all constants, so gates don't fire
       const result = calculateWateringAdvice(
         dryInputs({
           rainLast2Days: WET_48H_MM - 0.1,
@@ -128,6 +130,26 @@ describe("calculateWateringAdvice", () => {
       );
       // Should pass through to weekly target logic (shouldWater = true since no rain)
       expect(result.shouldWater).toBe(true);
+    });
+
+    it("in winter (Dec): 2mm in 2 days is enough to block watering (low evaporation)", () => {
+      vi.setSystemTime(new Date(2026, 11, 15)); // December, seasonFactor=0.3
+      // scaledWet48hMm = 3 * 0.3 = 0.9 → 2mm >= 0.9 triggers gate
+      const result = calculateWateringAdvice(
+        dryInputs({ rainLast2Days: 2 })
+      );
+      expect(result.shouldWater).toBe(false);
+      expect(result.noWaterReason).toBe("recent_rain");
+    });
+
+    it("in winter (Dec): 4mm over 5 days is enough to block watering", () => {
+      vi.setSystemTime(new Date(2026, 11, 15)); // December, seasonFactor=0.3
+      // scaledWet5dMm = 8 * 0.3 = 2.4 → 4mm >= 2.4 triggers gate
+      const result = calculateWateringAdvice(
+        dryInputs({ rainLast5Days: 4 })
+      );
+      expect(result.shouldWater).toBe(false);
+      expect(result.noWaterReason).toBe("recent_rain");
     });
   });
 
