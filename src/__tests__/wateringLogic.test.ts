@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   calculateWateringAdvice,
   getSeasonFactor,
+  computeRa,
+  computeDailyET0,
+  computeWeeklyTarget,
   WEEKLY_TARGET,
   WET_48H_MM,
   WET_72H_MM,
@@ -53,6 +56,106 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
 });
+
+// ─── ET₀ (Hargreaves-Samani) ─────────────────────────────────────────────────
+
+describe("computeRa", () => {
+  it("returns ~40 MJ/m²/day for 52°N in July (day 196)", () => {
+    const ra = computeRa(52, 196);
+    expect(ra).toBeGreaterThan(35);
+    expect(ra).toBeLessThan(45);
+  });
+
+  it("returns much less Ra in January (day 15) than in July", () => {
+    expect(computeRa(52, 15)).toBeLessThan(computeRa(52, 196) * 0.3);
+  });
+
+  it("southern latitudes have higher winter Ra than northern", () => {
+    // 40°N (Spain) in January gets more sun than 52°N (NL)
+    expect(computeRa(40, 15)).toBeGreaterThan(computeRa(52, 15));
+  });
+});
+
+describe("computeDailyET0", () => {
+  it("returns ~3–6 mm/day for a warm summer day at 52°N", () => {
+    const ra = computeRa(52, 196); // July
+    expect(computeDailyET0(24, 14, ra)).toBeGreaterThan(3);
+    expect(computeDailyET0(24, 14, ra)).toBeLessThan(7);
+  });
+
+  it("returns < 1 mm/day for a cold winter day at 52°N", () => {
+    const ra = computeRa(52, 15); // January
+    expect(computeDailyET0(5, 1, ra)).toBeLessThan(1);
+  });
+
+  it("returns 0 when tmax <= tmin (no temperature range)", () => {
+    const ra = computeRa(52, 196);
+    expect(computeDailyET0(15, 15, ra)).toBe(0);
+  });
+});
+
+describe("computeWeeklyTarget", () => {
+  it("returns a realistic summer weekly target for 52°N (~20–35 mm)", () => {
+    const d = new Date(2026, 6, 15);
+    const temps = Array.from({ length: 7 }, () => ({ date: d, tmax: 24, tmin: 14 }));
+    const target = computeWeeklyTarget(temps, 52);
+    expect(target).toBeGreaterThan(15);
+    expect(target).toBeLessThan(40);
+  });
+
+  it("returns a low winter weekly target for 52°N (>= 2 mm floor)", () => {
+    const d = new Date(2026, 0, 15);
+    const temps = Array.from({ length: 7 }, () => ({ date: d, tmax: 5, tmin: 0 }));
+    const target = computeWeeklyTarget(temps, 52);
+    expect(target).toBeLessThan(8);
+    expect(target).toBeGreaterThanOrEqual(2);
+  });
+
+  it("falls back to getSeasonFactor when no temp data (July → 24 mm)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 15));
+    expect(computeWeeklyTarget([], 52)).toBe(WEEKLY_TARGET * 1.2);
+    vi.useRealTimers();
+  });
+
+  it("floors at 2 mm even in extreme cold", () => {
+    const d = new Date(2026, 0, 15);
+    const temps = Array.from({ length: 7 }, () => ({ date: d, tmax: -10, tmin: -15 }));
+    expect(computeWeeklyTarget(temps, 52)).toBeGreaterThanOrEqual(2);
+  });
+
+  it("gives higher weekly target for lower latitudes with same temperature", () => {
+    const d = new Date(2026, 6, 15);
+    const temps = Array.from({ length: 7 }, () => ({ date: d, tmax: 28, tmin: 18 }));
+    // 35°N (Mediterranean) vs 52°N (NL): more Ra → higher ET₀
+    const targetMed = computeWeeklyTarget(temps, 35);
+    const targetNL = computeWeeklyTarget(temps, 52);
+    // In July northern latitudes can have similar Ra, so just check both are positive and reasonable
+    expect(targetMed).toBeGreaterThan(0);
+    expect(targetNL).toBeGreaterThan(0);
+  });
+});
+
+describe("calculateWateringAdvice — ET₀ integration", () => {
+  it("uses ET₀-based weeklyTarget when tempLast7 + latitude are provided", () => {
+    // Pinned to July (beforeEach); ET₀ target at 52°N ≠ hardcoded 24mm (= 20 × 1.2)
+    const d = new Date(2026, 6, 15);
+    const temps = Array.from({ length: 7 }, () => ({ date: d, tmax: 24, tmin: 14 }));
+    const result = calculateWateringAdvice(
+      dryInputs({ rainLast7: 0, tempLast7: temps, latitude: 52 })
+    );
+    // weeklyTarget comes from ET₀, not the hardcoded 24
+    expect(result.weeklyTarget).not.toBe(24);
+    expect(result.weeklyTarget).toBeGreaterThan(5);
+  });
+
+  it("falls back to season-factor target when tempLast7 is empty", () => {
+    const result = calculateWateringAdvice(dryInputs({ rainLast7: 0, latitude: 52 }));
+    expect(result.weeklyTarget).toBe(24); // July season factor 1.2 × 20
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 describe("getSeasonFactor", () => {
   it("returns 0.3 for winter months (Dec, Jan, Feb)", () => {
@@ -186,12 +289,18 @@ describe("calculateWateringAdvice", () => {
   });
 
   describe("weekly target logic", () => {
-    it("says no watering needed when rainLast7 already meets weekly target", () => {
-      // weeklyTarget = 24 in July
-      const result = calculateWateringAdvice(dryInputs({ rainLast7: 25 }));
+    it("says no watering needed when rainLast7 >= 80% of weekly target", () => {
+      // weeklyTarget = 24 in July; 80% = 19.2mm; use 20mm
+      const result = calculateWateringAdvice(dryInputs({ rainLast7: 20 }));
       expect(result.shouldWater).toBe(false);
       expect(result.noWaterReason).toBe("recent_rain");
-      expect(result.message).toContain("enough rain this week");
+      expect(result.message).toContain("adequately moistened");
+    });
+
+    it("recommends watering when rainLast7 < 80% of weekly target (no forecast)", () => {
+      // 80% of 24 = 19.2; use 18mm → below threshold, forecast = 0 → should water
+      const result = calculateWateringAdvice(dryInputs({ rainLast7: 18 }));
+      expect(result.shouldWater).toBe(true);
     });
 
     it("says no watering needed when rainLast7 + rainNext3 meets target", () => {

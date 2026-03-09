@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { calculateWateringAdvice } from "@shared/wateringLogic";
 import {
   fetchForecastForCity,
@@ -18,6 +18,15 @@ export function useWeatherAdvice(locationName, lastWateredDate) {
 
   const retry = useCallback(() => setRetryCount((c) => c + 1), []);
 
+  // Keep a ref so the recalculation effect always sees the latest value
+  // without re-triggering the fetch effect.
+  const lastWateredDateRef = useRef(lastWateredDate);
+  lastWateredDateRef.current = lastWateredDate;
+
+  // Cached weather inputs — needed to recalculate advice when lastWateredDate changes.
+  const weatherInputsRef = useRef(null);
+
+  // Fetch weather data only when location or retryCount changes.
   useEffect(() => {
     let cancelled = false;
 
@@ -29,7 +38,7 @@ export function useWeatherAdvice(locationName, lastWateredDate) {
         const { lat, lon } = await geocodeCity(locationName);
         if (cancelled) return;
 
-        const { rainLast7Total, rainLast2Days, rainLast3Days, rainLast5Days, maxDailyRainLast7 } =
+        const { rainLast7Total, rainLast2Days, rainLast3Days, rainLast5Days, maxDailyRainLast7, tempLast7 } =
           await fetchRainHistory(lat, lon);
         if (cancelled) return;
 
@@ -49,7 +58,7 @@ export function useWeatherAdvice(locationName, lastWateredDate) {
         if (!cancelled) {
           setDailyForecastNext5(dailyForecastNext5FromApi || []);
 
-          const newAdvice = calculateWateringAdvice({
+          const inputs = {
             rainLast7: rainLast7Total,
             rainLast2Days,
             rainLast3Days,
@@ -57,10 +66,12 @@ export function useWeatherAdvice(locationName, lastWateredDate) {
             maxDailyRainLast7,
             rainNext3,
             dailyForecastNext5: dailyForecastNext5FromApi,
-            lastWateredDate,
-          });
+            tempLast7,
+            latitude: lat,
+          };
+          weatherInputsRef.current = inputs;
 
-          setAdvice(newAdvice);
+          setAdvice(calculateWateringAdvice({ ...inputs, lastWateredDate: lastWateredDateRef.current }));
         }
       } catch (err) {
         if (!cancelled) {
@@ -77,7 +88,13 @@ export function useWeatherAdvice(locationName, lastWateredDate) {
     load();
 
     return () => { cancelled = true; };
-  }, [locationName, lastWateredDate, retryCount]);
+  }, [locationName, retryCount]);
+
+  // Recalculate advice without re-fetching when lastWateredDate changes.
+  useEffect(() => {
+    if (!weatherInputsRef.current) return;
+    setAdvice(calculateWateringAdvice({ ...weatherInputsRef.current, lastWateredDate }));
+  }, [lastWateredDate]);
 
   return { advice, isLoading, error, retry, dailyForecastNext5, historicalDailyRain };
 }

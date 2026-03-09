@@ -46,7 +46,7 @@ export function BestDayToWaterScreen({
     rainLast7,
     rainNext3,
     noWaterReason,
-    deficitLitersPerM2,
+    deficitMinutesPerM2,
   } = advice || {};
 
   // Date shown in the hero — best watering date if applicable, otherwise today
@@ -171,7 +171,7 @@ export function BestDayToWaterScreen({
               {shouldWater ? (
                 <>
                   <div className="best-rec-main">
-                    ~{(deficitLitersPerM2 || 0).toFixed(0)} L per m²
+                    ~{deficitMinutesPerM2 || 0} min per m²
                   </div>
                   <div className="best-rec-sub">Rain insufficient — watering advised</div>
                 </>

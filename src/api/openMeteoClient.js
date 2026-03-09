@@ -1,11 +1,15 @@
 export async function fetchRainHistory(lat, lon) {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=7&forecast_days=0&daily=rain_sum&timezone=auto`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=7&forecast_days=0&daily=rain_sum,temperature_2m_max,temperature_2m_min&timezone=auto`;
 
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch historical rain data (${res.status})`);
   const data = await res.json();
 
+  const dates = data.daily?.time ?? [];
   const rain = data.daily?.rain_sum ?? []; // array (oldest -> newest)
+  const tmaxArr = data.daily?.temperature_2m_max ?? [];
+  const tminArr = data.daily?.temperature_2m_min ?? [];
+
   const safe = rain.map(v => (typeof v === "number" ? v : 0));
 
   const rainLast7Total = safe.reduce((s, v) => s + v, 0);
@@ -14,7 +18,11 @@ export async function fetchRainHistory(lat, lon) {
   const rainLast5Days = safe.slice(-5).reduce((s, v) => s + v, 0);
   const maxDailyRainLast7 = Math.max(0, ...safe);
 
-  return { rainLast7Total, rainLast2Days, rainLast3Days, rainLast5Days, maxDailyRainLast7 };
+  const tempLast7 = dates
+    .map((d, i) => ({ date: new Date(`${d}T00:00:00`), tmax: tmaxArr[i], tmin: tminArr[i] }))
+    .filter(d => typeof d.tmax === "number" && typeof d.tmin === "number");
+
+  return { rainLast7Total, rainLast2Days, rainLast3Days, rainLast5Days, maxDailyRainLast7, tempLast7 };
 }
 
 /**

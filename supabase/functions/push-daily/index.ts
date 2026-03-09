@@ -176,7 +176,7 @@ function withinWindow(nowMin: number, targetMin: number, windowMin: number): boo
 // ---------- weather data ----------
 async function fetchRainData(lat: number, lon: number) {
   const url =
-    `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&daily=precipitation_sum&timezone=auto&past_days=7&forecast_days=5`;
+    `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min&timezone=auto&past_days=7&forecast_days=5`;
 
   const r = await fetch(url);
   if (!r.ok) throw new Error(`Open-Meteo error: ${r.status} ${await r.text()}`);
@@ -185,17 +185,27 @@ async function fetchRainData(lat: number, lon: number) {
   const timezone: string = j?.timezone ?? "UTC";
   const times: string[] = j?.daily?.time ?? [];
   const sums: number[] = (j?.daily?.precipitation_sum ?? []).map((v: any) => Number(v) || 0);
+  const tmaxArr: (number | null)[] = j?.daily?.temperature_2m_max ?? [];
+  const tminArr: (number | null)[] = j?.daily?.temperature_2m_min ?? [];
 
   const todayIso = new Date().toISOString().slice(0, 10);
   let todayIdx = times.findIndex((t) => t === todayIso);
   if (todayIdx === -1) todayIdx = 7;
 
-  const past7 = sums.slice(Math.max(0, todayIdx - 7), todayIdx);
+  const histStart = Math.max(0, todayIdx - 7);
+  const past7 = sums.slice(histStart, todayIdx);
   const past5 = past7.slice(-5);
   const past3 = past7.slice(-3);
   const past2 = past7.slice(-2);
   const next5 = sums.slice(todayIdx, todayIdx + 5);
   const next3 = next5.slice(0, 3);
+
+  const tempLast7 = times.slice(histStart, todayIdx).map((d, i) => {
+    const absIdx = histStart + i;
+    return { date: new Date(`${d}T00:00:00`), tmax: tmaxArr[absIdx], tmin: tminArr[absIdx] };
+  }).filter((d): d is { date: Date; tmax: number; tmin: number } =>
+    typeof d.tmax === "number" && typeof d.tmin === "number"
+  );
 
   const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
 
@@ -211,6 +221,7 @@ async function fetchRainData(lat: number, lon: number) {
       date: times[todayIdx + i] ?? null,
       mm,
     })),
+    tempLast7,
   };
 }
 
@@ -402,6 +413,8 @@ Deno.serve(async (req) => {
               date: d.date ? new Date(d.date + "T00:00:00") : null,
               rainMm: d.mm,
             })),
+            tempLast7: rain.tempLast7,
+            latitude: lat,
           });
 
           if (!advice.shouldWater) {
