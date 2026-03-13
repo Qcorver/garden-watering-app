@@ -50,12 +50,11 @@ export function BestDayToWaterScreen({
   } = advice || {};
 
   // Date shown in the hero — best watering date if applicable, otherwise today
-  const heroDateRaw =
-    shouldWater && bestWateringDate
-      ? bestWateringDate instanceof Date
-        ? bestWateringDate
-        : new Date(bestWateringDate)
-      : new Date();
+  let heroDateRaw = new Date();
+  if (shouldWater && bestWateringDate) {
+    const parsed = bestWateringDate instanceof Date ? bestWateringDate : new Date(bestWateringDate);
+    if (!isNaN(parsed.getTime())) heroDateRaw = parsed;
+  }
 
   const heroDay = format(heroDateRaw, "d");
   const heroMonth = format(heroDateRaw, "MMMM");

@@ -1,7 +1,7 @@
-export async function fetchRainHistory(lat, lon) {
+export async function fetchRainHistory(lat, lon, signal) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=7&forecast_days=0&daily=rain_sum,temperature_2m_max,temperature_2m_min&timezone=auto`;
 
-  const res = await fetch(url);
+  const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(`Failed to fetch historical rain data (${res.status})`);
   const data = await res.json();
 
@@ -18,9 +18,11 @@ export async function fetchRainHistory(lat, lon) {
   const rainLast5Days = safe.slice(-5).reduce((s, v) => s + v, 0);
   const maxDailyRainLast7 = Math.max(0, ...safe);
 
-  const tempLast7 = dates
-    .map((d, i) => ({ date: new Date(`${d}T00:00:00`), tmax: tmaxArr[i], tmin: tminArr[i] }))
-    .filter(d => typeof d.tmax === "number" && typeof d.tmin === "number");
+  const allTempDays = dates.map((d, i) => ({ date: new Date(`${d}T00:00:00`), tmax: tmaxArr[i], tmin: tminArr[i] }));
+  const tempLast7 = allTempDays.filter(d => typeof d.tmax === "number" && typeof d.tmin === "number");
+  if (tempLast7.length < allTempDays.length) {
+    console.warn(`[openMeteo] ${allTempDays.length - tempLast7.length} day(s) dropped from ET₀ calculation due to missing temperature data`);
+  }
 
   return { rainLast7Total, rainLast2Days, rainLast3Days, rainLast5Days, maxDailyRainLast7, tempLast7 };
 }
@@ -29,10 +31,10 @@ export async function fetchRainHistory(lat, lon) {
  * Fetch daily rainfall history (mm) for the past N days.
  * Returns: [{ date: Date, rainMm: number }]
  */
-export async function fetchDailyRainHistory(lat, lon, pastDays = 30) {
+export async function fetchDailyRainHistory(lat, lon, pastDays = 30, signal) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=${pastDays}&forecast_days=0&daily=rain_sum&timezone=auto`;
 
-  const res = await fetch(url);
+  const res = await fetch(url, { signal });
   if (!res.ok) {
     throw new Error(`Failed to fetch daily rain history (${res.status})`);
   }

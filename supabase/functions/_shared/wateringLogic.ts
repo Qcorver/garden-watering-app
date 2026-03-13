@@ -8,8 +8,8 @@ export const WEEKLY_TARGET = 20; // mm
 export const DRY_DAY_THRESHOLD = 1; // mm
 
 // Assumed watering application rate for converting mm deficit → minutes.
-// 1 L/min per m² is typical for a gentle garden hose held over a single m².
-export const WATERING_RATE_L_PER_MIN = 1; // L/min per m²
+// 7.5 L/min per m² based on measured hose output of 2L per 16s.
+export const WATERING_RATE_L_PER_MIN = 7.5; // L/min per m²
 
 // "Soil likely still wet" gates (tweakable). Scaled by seasonFactor at runtime.
 export const WET_48H_MM = 3; // mm in last 2 days

@@ -44,8 +44,8 @@ export function PlantIllustration({ weather = "sunny", soilWet = true }) {
         </g>
       )}
 
-      {/* ── Raindrops (rain only) ── */}
-      {isRain && (
+      {/* ── Raindrops (rain only, and only when soil is wet / plant is healthy) ── */}
+      {isRain && soilWet && (
         <g className="raindrops">
           <line className="raindrop" x1="58"  y1="60" x2="55"  y2="72" stroke="#5b9bd5" strokeWidth="2.2" strokeLinecap="round"/>
           <line className="raindrop" x1="72"  y1="64" x2="69"  y2="78" stroke="#5b9bd5" strokeWidth="2.2" strokeLinecap="round"/>
@@ -115,8 +115,3 @@ export function PlantIllustration({ weather = "sunny", soilWet = true }) {
     </svg>
   );
 }
-
-// Named aliases kept for any future reference
-export function DryPlant()          { return <PlantIllustration weather="sunny"  soilWet={false} />; }
-export function UpcomingRainPlant() { return <PlantIllustration weather="rain"   soilWet={true}  />; }
-export function RecentRainPlant()   { return <PlantIllustration weather="cloudy" soilWet={true}  />; }

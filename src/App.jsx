@@ -165,7 +165,7 @@ export default function App() {
           }
           onClick={() => setActiveTab("best")}
         >
-          <span className="tab-icon">☀️</span>
+          <span className="tab-icon">💧</span>
           <span className="tab-label">Best Day</span>
         </button>
         <button

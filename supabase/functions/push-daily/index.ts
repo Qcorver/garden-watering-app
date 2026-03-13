@@ -10,7 +10,7 @@ import { calculateWateringAdvice } from "../_shared/wateringLogic.ts";
  *
  * Schema:
  * - push_devices: user_id, push_token, is_enabled, platform
- * - user_preferences: user_id, notify_hour, notify_minute, push_enabled
+ * - user_preferences: user_id, push_enabled
  * - user_location: user_id, lat, lon
  *
  * Secrets: PROJECT_SUPABASE_URL, PROJECT_SERVICE_ROLE_KEY,
@@ -164,6 +164,7 @@ function minutesSinceMidnightInTimeZone(date: Date, timeZone: string): number {
     if (!Number.isFinite(h) || !Number.isFinite(m)) return minutesSinceMidnight(date);
     return h * 60 + m;
   } catch {
+    console.warn(`[push-daily] Invalid timezone "${timeZone}", falling back to server time`);
     return minutesSinceMidnight(date);
   }
 }
@@ -267,7 +268,7 @@ Deno.serve(async (req) => {
       return new Response("Method not allowed", { status: 405, headers: cors });
     }
 
-    if (CRON_SECRET) {
+    if (CRON_SECRET !== "") {
       const provided =
         (req.headers.get("x-cron-secret") ?? req.headers.get("cron-secret") ?? "").trim();
       if (!provided || provided !== CRON_SECRET) {
@@ -328,7 +329,7 @@ Deno.serve(async (req) => {
     // 2) preferences (only push_enabled)
     const { data: prefsRows, error: prefsError } = await supabase
       .from("user_preferences")
-      .select("user_id,notify_hour,notify_minute,push_enabled")
+      .select("user_id,push_enabled")
       .in("user_id", userIds)
       .eq("push_enabled", true);
 
@@ -381,12 +382,7 @@ Deno.serve(async (req) => {
           if (!prefs) return { kind: "skip", reason: "no_prefs" };
           if (!loc) return { kind: "skip", reason: "no_location" };
 
-          const notifyHour = Number(prefs?.notify_hour);
-          const notifyMinute = Number(prefs?.notify_minute);
-          if (!Number.isFinite(notifyHour) || !Number.isFinite(notifyMinute)) {
-            return { kind: "skip", reason: "bad_notify_time" };
-          }
-          const targetMin = notifyHour * 60 + notifyMinute;
+          const targetMin = 10 * 60; // 10:00 local time
 
           const lat = Number(loc?.lat);
           const lon = Number(loc?.lon);

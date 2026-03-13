@@ -6,12 +6,13 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PROXY_BASE = `${SUPABASE_URL}/functions/v1/weather-proxy`;
 
-async function proxyFetch(params) {
+async function proxyFetch(params, signal) {
   const qs = new URLSearchParams(params).toString();
   const res = await fetch(`${PROXY_BASE}?${qs}`, {
     headers: {
       Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
     },
+    signal,
   });
 
   if (!res.ok) {
@@ -26,11 +27,11 @@ async function proxyFetch(params) {
  * Search locations for autocomplete.
  * Returns normalized results: [{ label, value, lat, lon }]
  */
-export async function searchLocations(query, limit = 6) {
+export async function searchLocations(query, limit = 6, signal) {
   const q = (query || "").trim();
   if (q.length < 2) return [];
 
-  const data = await proxyFetch({ action: "search", q, limit: String(limit) });
+  const data = await proxyFetch({ action: "search", q, limit: String(limit) }, signal);
 
   return (data || []).map((loc) => {
     const name = loc?.name ?? "";
@@ -47,8 +48,8 @@ export async function searchLocations(query, limit = 6) {
 /**
  * Geocode a city name (e.g. "Amstelveen,NL") to lat/lon.
  */
-export async function geocodeCity(cityName) {
-  const data = await proxyFetch({ action: "geocode", q: cityName });
+export async function geocodeCity(cityName, signal) {
+  const data = await proxyFetch({ action: "geocode", q: cityName }, signal);
 
   if (!data.length) {
     throw new Error(`City not found: ${cityName}`);
@@ -78,8 +79,8 @@ export async function reverseGeocode(lat, lon) {
 /**
  * Fetch 5-day / 3-hour forecast for a given city name.
  */
-export async function fetchForecastForCity(cityName) {
-  return proxyFetch({ action: "forecast", q: cityName });
+export async function fetchForecastForCity(cityName, signal) {
+  return proxyFetch({ action: "forecast", q: cityName }, signal);
 }
 
 /**

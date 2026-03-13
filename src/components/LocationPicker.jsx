@@ -14,6 +14,7 @@ export default function LocationPicker({ locationName, onLocationChange }) {
   const [searchError, setSearchError] = useState(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const debounceRef = useRef(null);
+  const searchAbortRef = useRef(null);
 
   async function handleUseCurrentLocation() {
     setGpsError(null);
@@ -67,22 +68,27 @@ export default function LocationPicker({ locationName, onLocationChange }) {
     }
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (searchAbortRef.current) searchAbortRef.current.abort();
 
     debounceRef.current = setTimeout(async () => {
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
+
       try {
         setIsSearching(true);
         setSearchError(null);
 
-        const results = await searchLocations(q, 6);
+        const results = await searchLocations(q, 6, controller.signal);
         setOptions(results);
         setIsDropdownOpen(results.length > 0);
       } catch (err) {
+        if (err.name === "AbortError") return;
         console.error(err);
         setOptions([]);
         setIsDropdownOpen(false);
         setSearchError(err?.message || "Location search failed.");
       } finally {
-        setIsSearching(false);
+        if (!controller.signal.aborted) setIsSearching(false);
       }
     }, 300);
 

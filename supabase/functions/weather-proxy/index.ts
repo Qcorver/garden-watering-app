@@ -2,9 +2,16 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const OPENWEATHER_API_KEY = Deno.env.get("OPENWEATHER_API_KEY") ?? "";
 
+const ALLOWED_ORIGINS = new Set([
+  "capacitor://localhost",   // iOS Capacitor
+  "http://localhost",        // Android Capacitor
+  "http://localhost:5173",   // Vite dev server
+]);
+
 function corsHeaders(origin: string | null) {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.has(origin) ? origin : "capacitor://localhost";
   return {
-    "Access-Control-Allow-Origin": origin ?? "*",
+    "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
   } as Record<string, string>;

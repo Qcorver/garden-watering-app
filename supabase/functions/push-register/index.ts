@@ -12,8 +12,8 @@ Deno.serve(async (req) => {
 
     const { user_id, push_token, platform, is_enabled } = await req.json();
 
-    if (!push_token || typeof push_token !== "string") {
-      return Response.json({ ok: false, error: "push_token required" }, { status: 400 });
+    if (!push_token || typeof push_token !== "string" || push_token.length < 80) {
+      return Response.json({ ok: false, error: "push_token invalid" }, { status: 400 });
     }
 
     if (!user_id || typeof user_id !== "string") {

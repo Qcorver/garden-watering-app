@@ -28,58 +28,51 @@ export function useWeatherAdvice(locationName, lastWateredDate) {
 
   // Fetch weather data only when location or retryCount changes.
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+    const { signal } = controller;
 
     async function load() {
       try {
         setIsLoading(true);
         setError(null);
 
-        const { lat, lon } = await geocodeCity(locationName);
-        if (cancelled) return;
+        const { lat, lon } = await geocodeCity(locationName, signal);
 
         const { rainLast7Total, rainLast2Days, rainLast3Days, rainLast5Days, maxDailyRainLast7, tempLast7 } =
-          await fetchRainHistory(lat, lon);
-        if (cancelled) return;
+          await fetchRainHistory(lat, lon, signal);
 
-        const dailyHistory = await fetchDailyRainHistory(lat, lon, 30);
-        if (!cancelled) {
-          setHistoricalDailyRain(dailyHistory || []);
-        }
+        const dailyHistory = await fetchDailyRainHistory(lat, lon, 30, signal);
+        setHistoricalDailyRain(dailyHistory || []);
 
-        const forecast = await fetchForecastForCity(locationName);
-        if (cancelled) return;
+        const forecast = await fetchForecastForCity(locationName, signal);
 
         const {
           rainNext3,
           dailyForecastNext5: dailyForecastNext5FromApi,
         } = extractRainDataFromForecast(forecast);
 
-        if (!cancelled) {
-          setDailyForecastNext5(dailyForecastNext5FromApi || []);
+        setDailyForecastNext5(dailyForecastNext5FromApi || []);
 
-          const inputs = {
-            rainLast7: rainLast7Total,
-            rainLast2Days,
-            rainLast3Days,
-            rainLast5Days,
-            maxDailyRainLast7,
-            rainNext3,
-            dailyForecastNext5: dailyForecastNext5FromApi,
-            tempLast7,
-            latitude: lat,
-          };
-          weatherInputsRef.current = inputs;
+        const inputs = {
+          rainLast7: rainLast7Total,
+          rainLast2Days,
+          rainLast3Days,
+          rainLast5Days,
+          maxDailyRainLast7,
+          rainNext3,
+          dailyForecastNext5: dailyForecastNext5FromApi,
+          tempLast7,
+          latitude: lat,
+        };
+        weatherInputsRef.current = inputs;
 
-          setAdvice(calculateWateringAdvice({ ...inputs, lastWateredDate: lastWateredDateRef.current }));
-        }
+        setAdvice(calculateWateringAdvice({ ...inputs, lastWateredDate: lastWateredDateRef.current }));
       } catch (err) {
-        if (!cancelled) {
-          console.error(err);
-          setError(err.message || "Failed to load weather data.");
-        }
+        if (err.name === "AbortError") return;
+        console.error(err);
+        setError(err.message || "Failed to load weather data.");
       } finally {
-        if (!cancelled) {
+        if (!signal.aborted) {
           setIsLoading(false);
         }
       }
@@ -87,7 +80,7 @@ export function useWeatherAdvice(locationName, lastWateredDate) {
 
     load();
 
-    return () => { cancelled = true; };
+    return () => { controller.abort(); };
   }, [locationName, retryCount]);
 
   // Recalculate advice without re-fetching when lastWateredDate changes.

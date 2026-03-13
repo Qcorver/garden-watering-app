@@ -245,6 +245,7 @@ export async function registerForPushNotifications(
     tokenTimeoutId = window.setTimeout(() => {
       tokenTimeoutId = null;
       if (!tokenReceived) {
+        registrationInFlight = false;
         console.warn(
           "[push] No registration token received after 10s. If you are on the iOS simulator, APNs tokens won’t be delivered. On a real device, check Signing/Capabilities (Push Notifications) and that you are running a device build."
         );
