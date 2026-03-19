@@ -343,6 +343,27 @@ Deno.serve(async (req) => {
 
     if (locError) throw locError;
 
+    // 4) watering sessions (last 7 days) — so push advice matches in-app advice
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const sevenDaysAgoIso = sevenDaysAgo.toISOString().slice(0, 10);
+
+    const { data: sessionRows, error: sessionError } = await supabase
+      .from("watering_sessions")
+      .select("user_id,watered_on")
+      .in("user_id", userIds)
+      .gte("watered_on", sevenDaysAgoIso);
+
+    if (sessionError) throw sessionError;
+
+    // Most recent watered_on per user
+    const lastWateredByUser = new Map<string, Date>();
+    for (const row of sessionRows ?? []) {
+      const d = new Date(`${row.watered_on}T00:00:00`);
+      const existing = lastWateredByUser.get(row.user_id);
+      if (!existing || d > existing) lastWateredByUser.set(row.user_id, d);
+    }
+
     const prefsByUser = new Map((prefsRows ?? []).map((p: any) => [p.user_id, p]));
     const locByUser = new Map((locRows ?? []).map((l: any) => [l.user_id, l]));
 
@@ -411,6 +432,7 @@ Deno.serve(async (req) => {
             })),
             tempLast7: rain.tempLast7,
             latitude: lat,
+            lastWateredDate: lastWateredByUser.get(row.user_id) ?? null,
           });
 
           if (!advice.shouldWater) {

@@ -45,6 +45,22 @@ function getLastWateredDateFromHistory(wateringHistory) {
   return latest;
 }
 
+async function syncWateringSession(userId, key, active) {
+  if (!userId) return;
+  if (active) {
+    const { error } = await supabase
+      .from("watering_sessions")
+      .upsert({ user_id: userId, watered_on: key }, { onConflict: "user_id,watered_on" });
+    if (error) console.error("[watering] upsert failed", error);
+  } else {
+    const { error } = await supabase
+      .from("watering_sessions")
+      .delete()
+      .match({ user_id: userId, watered_on: key });
+    if (error) console.error("[watering] delete failed", error);
+  }
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState("best");
 
@@ -74,6 +90,30 @@ export default function App() {
   const { userId, ensureAuthUserId } = useAuth();
   const { pushEnabled, pushLoading, handleTogglePush } = usePushNotifications(userId, ensureAuthUserId);
   const { advice, isLoading, error, retry, dailyForecastNext5, historicalDailyRain } = useWeatherAdvice(locationName, lastWateredDate);
+
+  // Load watering sessions from Supabase on first auth and merge with localStorage
+  useEffect(() => {
+    if (!userId) return;
+
+    async function loadSessions() {
+      const { data, error } = await supabase
+        .from("watering_sessions")
+        .select("watered_on")
+        .eq("user_id", userId);
+      if (error) {
+        console.error("[watering] load failed", error);
+        return;
+      }
+      if (!data || data.length === 0) return;
+      setWateringHistory((prev) => {
+        const merged = { ...prev };
+        data.forEach(({ watered_on }) => { merged[watered_on] = true; });
+        return merged;
+      });
+    }
+
+    loadSessions();
+  }, [userId]);
 
   // Sync location to Supabase so push-daily can look it up
   useEffect(() => {
@@ -114,10 +154,9 @@ export default function App() {
 
   function handleToggleWateredDay(date) {
     const key = format(date, "yyyy-MM-dd");
-    setWateringHistory((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
+    const newValue = !wateringHistory[key];
+    setWateringHistory((prev) => ({ ...prev, [key]: newValue }));
+    syncWateringSession(userId, key, newValue);
   }
 
   return (

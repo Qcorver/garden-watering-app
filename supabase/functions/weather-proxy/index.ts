@@ -4,8 +4,10 @@ const OPENWEATHER_API_KEY = Deno.env.get("OPENWEATHER_API_KEY") ?? "";
 
 const ALLOWED_ORIGINS = new Set([
   "capacitor://localhost",   // iOS Capacitor
-  "http://localhost",        // Android Capacitor
+  "http://localhost",        // Android Capacitor (Capacitor v3/v4)
+  "https://localhost",       // Android Capacitor (Capacitor v5+)
   "http://localhost:5173",   // Vite dev server
+  "https://localhost:5173",  // Vite dev server (HTTPS)
 ]);
 
 function corsHeaders(origin: string | null) {
