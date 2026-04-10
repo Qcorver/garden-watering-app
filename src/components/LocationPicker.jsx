@@ -2,8 +2,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { searchLocations, reverseGeocode } from "../api/openWeatherClient";
 import "./LocationPicker.css";
+import { t } from "../i18n";
 
-export default function LocationPicker({ locationName, onLocationChange }) {
+export default function LocationPicker({ locationName, onLocationChange, lang = "en" }) {
   const [manualInput, setManualInput] = useState("");
   const [gpsError, setGpsError] = useState(null);
   const [isLocating, setIsLocating] = useState(false);
@@ -20,7 +21,7 @@ export default function LocationPicker({ locationName, onLocationChange }) {
     setGpsError(null);
 
     if (!navigator.geolocation) {
-      setGpsError("Geolocation is not supported by your browser.");
+      setGpsError(t(lang, "locGeoNotSupported"));
       return;
     }
 
@@ -35,7 +36,7 @@ export default function LocationPicker({ locationName, onLocationChange }) {
           const fullName = await reverseGeocode(lat, lon);
 
           if (!fullName) {
-            setGpsError("Could not determine city from GPS.");
+            setGpsError(t(lang, "locGpsCityFailed"));
             setIsLocating(false);
             return;
           }
@@ -43,14 +44,14 @@ export default function LocationPicker({ locationName, onLocationChange }) {
           onLocationChange(fullName);
         } catch (err) {
           console.error(err);
-          setGpsError("Failed to get location from GPS.");
+          setGpsError(t(lang, "locGpsFailed"));
         } finally {
           setIsLocating(false);
         }
       },
       (err) => {
         console.error(err);
-        setGpsError("Permission denied or GPS unavailable.");
+        setGpsError(t(lang, "locPermDenied"));
         setIsLocating(false);
       }
     );
@@ -78,7 +79,7 @@ export default function LocationPicker({ locationName, onLocationChange }) {
         setIsSearching(true);
         setSearchError(null);
 
-        const results = await searchLocations(q, 6, controller.signal);
+        const results = await searchLocations(q, 6, controller.signal, lang);
         setOptions(results);
         setIsDropdownOpen(results.length > 0);
       } catch (err) {
@@ -86,7 +87,7 @@ export default function LocationPicker({ locationName, onLocationChange }) {
         console.error(err);
         setOptions([]);
         setIsDropdownOpen(false);
-        setSearchError(err?.message || "Location search failed.");
+        setSearchError(err?.message || t(lang, "locSearchFailed"));
       } finally {
         if (!controller.signal.aborted) setIsSearching(false);
       }
@@ -95,25 +96,19 @@ export default function LocationPicker({ locationName, onLocationChange }) {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [manualInput]);
+  }, [manualInput, lang]);
 
   function handleSelectOption(opt) {
-    // Show the friendly label in the input, but store the app-friendly value in state
     setManualInput(opt.label);
     setIsDropdownOpen(false);
     setOptions([]);
     setSearchError(null);
-
-    // Persist selection to the app
     onLocationChange(opt.value);
-
-    // Keep the label in the field so user sees what they picked
   }
 
   function handleSubmit(e) {
     e.preventDefault();
 
-    // If we have suggestions, pick the first one on Enter
     if (options.length > 0) {
       handleSelectOption(options[0]);
       return;
@@ -124,12 +119,11 @@ export default function LocationPicker({ locationName, onLocationChange }) {
     setIsDropdownOpen(false);
     setOptions([]);
     setSearchError(null);
-    // Keep the typed value visible; do not clear it
   }
 
   return (
     <footer className="loc-footer">
-      <div className="loc-title">Location</div>
+      <div className="loc-title">{t(lang, "locTitle")}</div>
 
       {/* Current location button */}
       <button
@@ -138,7 +132,7 @@ export default function LocationPicker({ locationName, onLocationChange }) {
         disabled={isLocating}
         className="loc-gps-btn"
       >
-        {isLocating ? "Detecting current location..." : "Use my current location"}
+        {isLocating ? t(lang, "locDetecting") : t(lang, "locUseCurrent")}
       </button>
 
       {gpsError && <p className="loc-gps-error">{gpsError}</p>}
@@ -148,7 +142,7 @@ export default function LocationPicker({ locationName, onLocationChange }) {
         <div className="loc-input-wrap">
           <input
             type="text"
-            placeholder="e.g. Amsterdam"
+            placeholder={t(lang, "locPlaceholder")}
             value={manualInput}
             onChange={(e) => setManualInput(e.target.value)}
             onFocus={() => {
@@ -163,7 +157,7 @@ export default function LocationPicker({ locationName, onLocationChange }) {
 
           {(isSearching || searchError) && (
             <div className="loc-search-status">
-              {isSearching ? "Searching…" : searchError ? `⚠️ ${searchError}` : null}
+              {isSearching ? t(lang, "locSearching") : searchError ? `⚠️ ${searchError}` : null}
             </div>
           )}
 
@@ -184,12 +178,12 @@ export default function LocationPicker({ locationName, onLocationChange }) {
           )}
         </div>
         <button type="submit" className="loc-submit-btn">
-          Set
+          {t(lang, "locSet")}
         </button>
       </form>
 
       <p className="loc-current">
-        Using: <strong>{locationName}</strong>
+        {t(lang, "locUsing").split("{name}")[0]}<strong>{locationName}</strong>
       </p>
     </footer>
   );

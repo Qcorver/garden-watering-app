@@ -12,6 +12,7 @@ import {
   format,
 } from "date-fns";
 import "./CalendarScreen.css";
+import { t, getDateLocale } from "../i18n";
 
 /**
  * @param {Object} props
@@ -25,6 +26,7 @@ import "./CalendarScreen.css";
  * @param {function(Date): void} props.onMonthChange
  * @param {boolean} props.isLoading
  * @param {string|null} props.error
+ * @param {string} props.lang - 'en' | 'nl'
  */
 export function CalendarScreen({
   advice,
@@ -37,7 +39,9 @@ export function CalendarScreen({
   isLoading,
   error,
   onRetry,
+  lang = "en",
 }) {
+  const dateLocale = getDateLocale(lang);
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -126,24 +130,31 @@ export function CalendarScreen({
     if (canGoNext) onMonthChange(addMonths(currentMonth, 1));
   };
 
+  const monthLabel = format(currentMonth, "MMMM yyyy", { locale: dateLocale });
+  const weekdays = t(lang, "calWeekdays");
+
   return (
     <div className="cal-screen">
 
       {/* ── HEADER ── */}
       <div className="cal-header">
         <div className="cal-header-app-title">🌿 Garden Watering</div>
-        <div className="cal-header-title">Watering<br />Calendar</div>
-        <div className="cal-header-subtitle">{format(currentMonth, "MMMM yyyy")}</div>
+        <div className="cal-header-title">
+          {t(lang, "calTitle").split("\n").map((line, i) => (
+            <React.Fragment key={i}>{line}{i === 0 && <br />}</React.Fragment>
+          ))}
+        </div>
+        <div className="cal-header-subtitle">{monthLabel}</div>
 
         <div className="cal-month-nav">
-          <div className="cal-month-name">{format(currentMonth, "MMMM yyyy")}</div>
+          <div className="cal-month-name">{monthLabel}</div>
           <div className="cal-nav-buttons">
             <button
               type="button"
               onClick={handlePrevMonth}
               disabled={!canGoPrev}
               className="cal-nav-btn"
-              aria-label="Previous month"
+              aria-label={t(lang, "calPrevMonth")}
             >
               ‹
             </button>
@@ -152,7 +163,7 @@ export function CalendarScreen({
               onClick={handleNextMonth}
               disabled={!canGoNext}
               className="cal-nav-btn"
-              aria-label="Next month"
+              aria-label={t(lang, "calNextMonth")}
             >
               ›
             </button>
@@ -167,15 +178,15 @@ export function CalendarScreen({
           <div className="cal-error-block">
             <p className="cal-error">{error}</p>
             <button type="button" className="cal-retry-btn" onClick={onRetry}>
-              Retry
+              {t(lang, "retry")}
             </button>
           </div>
         )}
-        {isLoading && <p className="cal-loading">Loading weather data…</p>}
+        {isLoading && <p className="cal-loading">{t(lang, "loadingWeather")}</p>}
 
         {/* Weekday header */}
         <div className="cal-weekdays">
-          {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => (
+          {weekdays.map((d) => (
             <div key={d} className="cal-weekday">{d}</div>
           ))}
         </div>
@@ -231,15 +242,15 @@ export function CalendarScreen({
         <div className="cal-legend">
           <div className="cal-legend-item">
             <div className="cal-legend-dot cal-legend-dot--today" />
-            <span className="cal-legend-label">Today</span>
+            <span className="cal-legend-label">{t(lang, "calLegendToday")}</span>
           </div>
           <div className="cal-legend-item">
             <div className="cal-legend-dot cal-legend-dot--best" />
-            <span className="cal-legend-label">Best day</span>
+            <span className="cal-legend-label">{t(lang, "calLegendBest")}</span>
           </div>
           <div className="cal-legend-item">
             <div className="cal-legend-dot cal-legend-dot--watered" />
-            <span className="cal-legend-label">You watered</span>
+            <span className="cal-legend-label">{t(lang, "calLegendWatered")}</span>
           </div>
         </div>
       </div>

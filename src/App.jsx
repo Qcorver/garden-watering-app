@@ -1,9 +1,11 @@
 // src/App.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { format, isAfter, parseISO } from "date-fns";
+import { t } from "./i18n";
 
 import { BestDayToWaterScreen } from "./components/BestDayToWaterScreen";
 import { CalendarScreen } from "./components/CalendarScreen";
+import { PruningScreen } from "./components/PruningScreen";
 
 import { useAuth } from "./hooks/useAuth";
 import { usePushNotifications } from "./hooks/usePushNotifications";
@@ -64,6 +66,18 @@ async function syncWateringSession(userId, key, active) {
 export default function App() {
   const [activeTab, setActiveTab] = useState("best");
 
+  // --- Language (persisted to localStorage) ---
+  const [lang, setLang] = useState(() => {
+    const stored = localStorage.getItem("lang");
+    if (stored) return stored;
+    return navigator.language?.startsWith("nl") ? "nl" : "en";
+  });
+
+  function handleSetLang(newLang) {
+    setLang(newLang);
+    localStorage.setItem("lang", newLang);
+  }
+
   // --- Watering history (persisted to localStorage) ---
   const [wateringHistory, setWateringHistory] = useState(loadWateringHistory);
 
@@ -78,7 +92,7 @@ export default function App() {
 
   // --- Location (persisted to localStorage) ---
   const [locationName, setLocationName] = useState(() => {
-    return localStorage.getItem("selectedLocation") || "Amstelveen,NL";
+    return localStorage.getItem("selectedLocation") || "";
   });
 
   const location = { name: locationName, type: "saved" };
@@ -90,6 +104,47 @@ export default function App() {
   const { userId, ensureAuthUserId } = useAuth();
   const { pushEnabled, pushLoading, handleTogglePush } = usePushNotifications(userId, ensureAuthUserId);
   const { advice, isLoading, error, retry, dailyForecastNext5, historicalDailyRain } = useWeatherAdvice(locationName, lastWateredDate);
+
+  // --- Sync garden plants to Supabase (for pruning push notifications) ---
+  const syncPlants = useCallback(
+    async (plants) => {
+      if (!userId) return;
+      const rows = plants.map((p) => ({
+        id: p.id,
+        user_id: userId,
+        perenual_id: p.perenualId ?? null,
+        common_name: p.commonName,
+        scientific_name: p.scientificName ?? null,
+        pruning_months: p.pruningMonths ?? [],
+        image_url: p.imageUrl ?? null,
+        sunlight: p.sunlight ?? [],
+        cycle: p.cycle ?? null,
+        maintenance: p.maintenance ?? null,
+        light_condition: p.lightCondition ?? "sun",
+        in_pot: p.inPot ?? false,
+        description: p.description ?? null,
+        updated_at: new Date().toISOString(),
+      }));
+
+      if (rows.length > 0) {
+        const { error } = await supabase
+          .from("garden_plants")
+          .upsert(rows, { onConflict: "id" });
+        if (error) console.error("[plants] upsert failed", error);
+      }
+
+      const keepIds = plants.map((p) => p.id);
+      const deleteQ = supabase
+        .from("garden_plants")
+        .delete()
+        .eq("user_id", userId);
+      const { error: delError } = keepIds.length > 0
+        ? await deleteQ.not("id", "in", `(${keepIds.map((id) => `"${id}"`).join(",")})`)
+        : await deleteQ;
+      if (delError) console.error("[plants] delete failed", delError);
+    },
+    [userId]
+  );
 
   // Load watering sessions from Supabase on first auth and merge with localStorage
   useEffect(() => {
@@ -114,6 +169,14 @@ export default function App() {
 
     loadSessions();
   }, [userId]);
+
+  // Sync lang preference to Supabase so push-daily can send localised notifications
+  useEffect(() => {
+    if (!userId) return;
+    supabase
+      .from("user_preferences")
+      .upsert({ user_id: userId, lang }, { onConflict: "user_id" });
+  }, [userId, lang]);
 
   // Sync location to Supabase so push-daily can look it up
   useEffect(() => {
@@ -175,6 +238,16 @@ export default function App() {
             pushEnabled={pushEnabled}
             pushIsLoading={pushLoading}
             onTogglePush={handleTogglePush}
+            lang={lang}
+            onSetLang={handleSetLang}
+          />
+        )}
+
+        {activeTab === "pruning" && (
+          <PruningScreen
+            userId={userId}
+            onSyncPlants={syncPlants}
+            lang={lang}
           />
         )}
 
@@ -190,6 +263,7 @@ export default function App() {
             isLoading={isLoading}
             error={error}
             onRetry={retry}
+            lang={lang}
           />
         )}
       </main>
@@ -205,7 +279,7 @@ export default function App() {
           onClick={() => setActiveTab("best")}
         >
           <span className="tab-icon">💧</span>
-          <span className="tab-label">Best Day</span>
+          <span className="tab-label">{t(lang, "tabBestDay")}</span>
         </button>
         <button
           type="button"
@@ -217,7 +291,21 @@ export default function App() {
           onClick={() => setActiveTab("calendar")}
         >
           <span className="tab-icon">📅</span>
-          <span className="tab-label">Calendar</span>
+          <span className="tab-label">{t(lang, "tabCalendar")}</span>
+        </button>
+        <button
+          type="button"
+          className={
+            activeTab === "pruning"
+              ? "tab-bar-button tab-bar-button--active"
+              : "tab-bar-button"
+          }
+          onClick={() => setActiveTab("pruning")}
+        >
+          <span className="tab-icon">
+            <img src="/hedgetrimmer3.png" alt="Pruning" width="22" height="22" style={{objectFit: "contain"}} />
+          </span>
+          <span className="tab-label">{t(lang, "tabPruning")}</span>
         </button>
       </nav>
     </div>

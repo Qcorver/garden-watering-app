@@ -3,6 +3,7 @@ import { format, isToday, isTomorrow } from "date-fns";
 import "./BestDayToWaterScreen.css";
 import { PlantIllustration } from "./PlantIllustration";
 import LocationPicker from "./LocationPicker";
+import { t, getDateLocale } from "../i18n";
 
 /** Map OpenWeather `main` condition to illustration weather type. */
 function getWeatherType(main) {
@@ -10,6 +11,25 @@ function getWeatherType(main) {
   if (["Rain", "Drizzle", "Thunderstorm", "Snow"].includes(main)) return "rain";
   if (main === "Clouds" || main === "Atmosphere") return "cloudy";
   return "sunny";
+}
+
+/** Derive the UI message from advice fields (keeps push notifications in English). */
+function getAdviceMessage(lang, advice) {
+  const { shouldWater, noWaterReason, deficitMinutesPerM2 } = advice;
+  if (shouldWater) {
+    return t(lang, "msgWaterNeeded", { n: deficitMinutesPerM2 });
+  }
+  if (noWaterReason === "recent_watering") return t(lang, "msgRecentWatering");
+  if (noWaterReason === "upcoming_rain")   return t(lang, "msgUpcomingRain");
+  if (noWaterReason === "recent_rain") {
+    // Two distinct recent-rain messages — pick by which field in advice is set.
+    // The "adequately moistened" case comes from the weekly-total check.
+    // The "still wet" case comes from the short-window gates.
+    // We can't distinguish them here without adding a sub-reason, so we use
+    // the generic "still wet" message (covers both sensibly in the UI).
+    return t(lang, "msgRecentRainShort");
+  }
+  return t(lang, "msgWeeklyRain");
 }
 
 /**
@@ -25,6 +45,8 @@ function getWeatherType(main) {
  * @param {boolean} props.pushEnabled
  * @param {boolean} props.pushIsLoading
  * @param {(nextEnabled: boolean) => void} props.onTogglePush
+ * @param {string} props.lang - 'en' | 'nl'
+ * @param {(lang: string) => void} props.onSetLang
  */
 export function BestDayToWaterScreen({
   location,
@@ -38,16 +60,19 @@ export function BestDayToWaterScreen({
   pushEnabled,
   pushIsLoading,
   onTogglePush,
+  lang = "en",
+  onSetLang,
 }) {
   const {
     shouldWater,
     bestWateringDate,
-    message,
-    rainLast7,
-    rainNext3,
     noWaterReason,
     deficitMinutesPerM2,
+    rainLast7,
+    rainNext3,
   } = advice || {};
+
+  const dateLocale = getDateLocale(lang);
 
   // Date shown in the hero — best watering date if applicable, otherwise today
   let heroDateRaw = new Date();
@@ -57,25 +82,25 @@ export function BestDayToWaterScreen({
   }
 
   const heroDay = format(heroDateRaw, "d");
-  const heroMonth = format(heroDateRaw, "MMMM");
-  const heroWeekday = format(heroDateRaw, "EEEE");
+  const heroMonth = format(heroDateRaw, "MMMM", { locale: dateLocale });
+  const heroWeekday = format(heroDateRaw, "EEEE", { locale: dateLocale });
 
   // Badge text + style based on advice state
-  let badgeText = "Loading…";
+  let badgeText = t(lang, "badgeLoading");
   let badgePulseColor = "#7ed956";
   if (!isLoading && error) {
-    badgeText = "Unable to load";
+    badgeText = t(lang, "badgeUnableToLoad");
     badgePulseColor = "#f87171";
   } else if (!isLoading && advice) {
     if (shouldWater) {
-      if (isToday(heroDateRaw)) badgeText = "Water today";
-      else if (isTomorrow(heroDateRaw)) badgeText = "Water tomorrow";
-      else badgeText = `Water on ${format(heroDateRaw, "EEEE")}`;
+      if (isToday(heroDateRaw))        badgeText = t(lang, "badgeWaterToday");
+      else if (isTomorrow(heroDateRaw)) badgeText = t(lang, "badgeWaterTomorrow");
+      else                              badgeText = t(lang, "badgeWaterOn", { weekday: heroWeekday });
     } else if (noWaterReason === "upcoming_rain") {
-      badgeText = "Rain expected";
+      badgeText = t(lang, "badgeRainExpected");
       badgePulseColor = "#60a5fa";
     } else {
-      badgeText = "Well watered";
+      badgeText = t(lang, "badgeWellWatered");
       badgePulseColor = "#34d399";
     }
   }
@@ -99,7 +124,22 @@ export function BestDayToWaterScreen({
 
       {/* ── HERO HEADER ── */}
       <div className="best-hero">
-        <div className="best-app-title">🌿 Garden Watering</div>
+        <div className="best-hero-top-row">
+          <div className="best-app-title">🌿 Garden Watering</div>
+          {/* Language toggle */}
+          <div className="best-lang-toggle">
+            <button
+              type="button"
+              className={`best-lang-btn${lang === "en" ? " best-lang-btn--active" : ""}`}
+              onClick={() => onSetLang?.("en")}
+            >EN</button>
+            <button
+              type="button"
+              className={`best-lang-btn${lang === "nl" ? " best-lang-btn--active" : ""}`}
+              onClick={() => onSetLang?.("nl")}
+            >NL</button>
+          </div>
+        </div>
 
         <div className="best-date-display">
           <div className="best-date-day">{heroDay}</div>
@@ -125,13 +165,13 @@ export function BestDayToWaterScreen({
       {/* ── CONTENT AREA ── */}
       <div className="best-content">
 
-        {isLoading && <p className="best-loading">Loading weather data…</p>}
+        {isLoading && <p className="best-loading">{t(lang, "loadingWeather")}</p>}
 
         {error && (
           <div className="best-error-block">
             <p className="best-error">{error}</p>
             <button type="button" className="best-retry-btn" onClick={onRetry}>
-              Retry
+              {t(lang, "retry")}
             </button>
           </div>
         )}
@@ -139,11 +179,11 @@ export function BestDayToWaterScreen({
         {!isLoading && !error && advice && (
           <>
             {/* Rain overview */}
-            <div className="best-section-label">Rainfall overview</div>
+            <div className="best-section-label">{t(lang, "rainfallOverview")}</div>
             <div className="best-rain-card">
               <div className="best-rain-divider" />
               <div className="best-rain-stat">
-                <div className="best-rain-stat-label">Last 7 days</div>
+                <div className="best-rain-stat-label">{t(lang, "last7Days")}</div>
                 <div>
                   <span className="best-rain-stat-value">{(rainLast7 || 0).toFixed(1)}</span>
                   <span className="best-rain-stat-unit"> mm</span>
@@ -153,7 +193,7 @@ export function BestDayToWaterScreen({
                 </div>
               </div>
               <div className="best-rain-stat">
-                <div className="best-rain-stat-label">Next 3 days</div>
+                <div className="best-rain-stat-label">{t(lang, "next3Days")}</div>
                 <div>
                   <span className="best-rain-stat-value">{(rainNext3 || 0).toFixed(1)}</span>
                   <span className="best-rain-stat-unit"> mm</span>
@@ -166,18 +206,24 @@ export function BestDayToWaterScreen({
 
             {/* Recommendation */}
             <div className="best-rec-card">
-              <div className="best-rec-label">Recommendation</div>
+              <div className="best-rec-label">{t(lang, "recommendation")}</div>
               {shouldWater ? (
                 <>
                   <div className="best-rec-main">
-                    ~{deficitMinutesPerM2 || 0} min per m²
+                    ~{deficitMinutesPerM2} min per m²
                   </div>
-                  <div className="best-rec-sub">Rain insufficient — watering advised</div>
+                  <div className="best-rec-sub">
+                    {isTomorrow(heroDateRaw)
+                      ? t(lang, "wateringAdvisedTomorrow")
+                      : isToday(heroDateRaw)
+                        ? t(lang, "wateringAdvised")
+                        : t(lang, "wateringAdvisedOn", { weekday: heroWeekday })}
+                  </div>
                 </>
               ) : (
                 <>
-                  <div className="best-rec-main">No watering needed</div>
-                  <div className="best-rec-sub">{message}</div>
+                  <div className="best-rec-main">{t(lang, "noWateringNeeded")}</div>
+                  <div className="best-rec-sub">{getAdviceMessage(lang, advice)}</div>
                 </>
               )}
             </div>
@@ -185,7 +231,7 @@ export function BestDayToWaterScreen({
         )}
 
         {/* Push notifications */}
-        <div className="best-section-label">Reminders</div>
+        <div className="best-section-label">{t(lang, "reminders")}</div>
         <div
           role="button"
           aria-pressed={!!pushEnabled}
@@ -196,17 +242,17 @@ export function BestDayToWaterScreen({
           className={`best-notif-card${pushIsLoading ? " best-notif-card--loading" : ""}`}
         >
           <div className="best-notif-info">
-            <div className="best-notif-title">Push notifications</div>
-            <div className="best-notif-sub">Get reminded when it's time to water</div>
+            <div className="best-notif-title">{t(lang, "pushNotifications")}</div>
+            <div className="best-notif-sub">{t(lang, "pushNotificationsSub")}</div>
           </div>
           <div className={`best-toggle${pushEnabled ? " best-toggle--on" : ""}`} />
         </div>
         <div aria-live="polite" className="best-push-status">
-          {pushIsLoading ? "Saving…" : ""}
+          {pushIsLoading ? t(lang, "saving") : ""}
         </div>
 
         {/* Location */}
-        <div className="best-section-label">Your location</div>
+        <div className="best-section-label">{t(lang, "yourLocation")}</div>
         <div className="best-location-card">
           <div className="best-location-icon">📍</div>
           <div className="best-location-text">
@@ -220,6 +266,7 @@ export function BestDayToWaterScreen({
         <LocationPicker
           locationName={locationName || location?.name || ""}
           onLocationChange={onLocationChange}
+          lang={lang}
         />
 
       </div>

@@ -256,6 +256,30 @@ async function sendFcm(
   return { ok: res.ok, status: res.status, json };
 }
 
+// ---------- timezone helpers for pruning ----------
+function getDayOfMonthInTimezone(date: Date, timeZone: string): number {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      day: "numeric",
+    }).formatToParts(date);
+    return Number(parts.find((p) => p.type === "day")?.value ?? 0);
+  } catch {
+    return date.getDate();
+  }
+}
+
+function getMonthNameInTimezone(date: Date, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      month: "long",
+    }).format(date);
+  } catch {
+    return date.toLocaleString("en-US", { month: "long" });
+  }
+}
+
 // ---------- handler ----------
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
@@ -319,6 +343,7 @@ Deno.serve(async (req) => {
           in_window: 0,
           attempted: 0,
           sent: 0,
+          pruning_sent: 0,
           skipped_legacy_apns: 0,
           errors: [],
         },
@@ -326,10 +351,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 2) preferences (only push_enabled)
+    // 2) preferences (push_enabled + lang)
     const { data: prefsRows, error: prefsError } = await supabase
       .from("user_preferences")
-      .select("user_id,push_enabled")
+      .select("user_id,push_enabled,lang")
       .in("user_id", userIds)
       .eq("push_enabled", true);
 
@@ -343,7 +368,24 @@ Deno.serve(async (req) => {
 
     if (locError) throw locError;
 
-    // 4) watering sessions (last 7 days) — so push advice matches in-app advice
+    // 4) garden plants (for pruning notifications on the 1st of the month)
+    const { data: plantRows, error: plantError } = await supabase
+      .from("garden_plants")
+      .select("user_id,common_name,pruning_months")
+      .in("user_id", userIds);
+
+    if (plantError) throw plantError;
+
+    const plantsByUser = new Map<string, Array<{ common_name: string; pruning_months: string[] }>>();
+    for (const row of plantRows ?? []) {
+      if (!plantsByUser.has(row.user_id)) plantsByUser.set(row.user_id, []);
+      plantsByUser.get(row.user_id)!.push({
+        common_name: row.common_name,
+        pruning_months: row.pruning_months ?? [],
+      });
+    }
+
+    // 5) watering sessions (last 7 days) — so push advice matches in-app advice
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const sevenDaysAgoIso = sevenDaysAgo.toISOString().slice(0, 10);
@@ -379,6 +421,7 @@ Deno.serve(async (req) => {
     let attempted = 0;
     let sent = 0;
     let skippedLegacy = 0;
+    let pruningSent = 0;
 
     const errors: Array<{ token: string; status: number; json: any }> = [];
 
@@ -402,6 +445,7 @@ Deno.serve(async (req) => {
           const loc = locByUser.get(row.user_id);
           if (!prefs) return { kind: "skip", reason: "no_prefs" };
           if (!loc) return { kind: "skip", reason: "no_location" };
+          const userLang: "en" | "nl" = prefs.lang === "nl" ? "nl" : "en";
 
           const targetMin = 10 * 60; // 10:00 local time
 
@@ -419,6 +463,7 @@ Deno.serve(async (req) => {
           }
           inWindow++;
 
+          // ── Watering notification ────────────────────────────────────
           const advice = calculateWateringAdvice({
             rainLast7: rain.rainLast7,
             rainLast2Days: rain.rainLast2Days,
@@ -433,54 +478,80 @@ Deno.serve(async (req) => {
             tempLast7: rain.tempLast7,
             latitude: lat,
             lastWateredDate: lastWateredByUser.get(row.user_id) ?? null,
+            lang: userLang,
           });
+
+          if (advice.shouldWater) {
+            attempted++;
+
+            const messageBody = advice.message;
+            const notifTitle = userLang === "nl" ? "Tuin Bewatering" : title;
+            const bestDate = advice.bestWateringDate instanceof Date
+              ? advice.bestWateringDate.toISOString().slice(0, 10)
+              : (advice.bestWateringDate ?? "");
+
+            if (!dryRun) {
+              const r = await sendFcm(accessToken, tokenRaw, notifTitle, messageBody, {
+                kind: "daily",
+                sent_at: new Date().toISOString(),
+                timezone: rain.timezone,
+                best_watering_date: bestDate,
+                rain_last7_mm: rain.rainLast7.toFixed(1),
+                rain_next3_mm: rain.rainNext3.toFixed(1),
+              });
+
+              if (!r.ok) {
+                return {
+                  kind: "error",
+                  status: r.status,
+                  json: r.json,
+                  token_preview: tokenRaw.slice(0, 24) + "…",
+                };
+              }
+              sent++;
+            }
+          }
+
+          // ── Pruning notification (1st of the month only) ─────────────
+          const dayOfMonth = getDayOfMonthInTimezone(now, rain.timezone);
+          if (dayOfMonth === 1) {
+            const monthName = getMonthNameInTimezone(now, rain.timezone);
+            const userPlants = plantsByUser.get(row.user_id) ?? [];
+            const plantsThisMonth = userPlants.filter(
+              (p) => p.pruning_months.includes(monthName),
+            );
+
+            if (plantsThisMonth.length > 0) {
+              const plantNames = plantsThisMonth.map((p) => p.common_name).join(", ");
+              const pruningTitle = userLang === "nl" ? "✂️ Tijd om te snoeien!" : "✂️ Time to prune!";
+              const pruningBody = userLang === "nl"
+                ? `Deze maand: ${plantNames}`
+                : `This month: ${plantNames}`;
+
+              if (!dryRun) {
+                const pr = await sendFcm(
+                  accessToken,
+                  tokenRaw,
+                  pruningTitle,
+                  pruningBody,
+                  {
+                    kind: "pruning",
+                    sent_at: new Date().toISOString(),
+                    month: monthName,
+                  },
+                );
+                if (pr.ok) pruningSent++;
+              } else {
+                pruningSent++;
+              }
+            }
+          }
 
           if (!advice.shouldWater) {
-            return {
-              kind: "no_send",
-              reason: "not_triggered",
-              message: advice.message,
-              rainLast7: rain.rainLast7,
-              rainNext3: rain.rainNext3,
-            };
+            return { kind: "no_send", reason: "not_triggered" };
           }
 
-          attempted++;
-
-          const messageBody = advice.message;
-          const bestDate = advice.bestWateringDate instanceof Date
-            ? advice.bestWateringDate.toISOString().slice(0, 10)
-            : (advice.bestWateringDate ?? "");
-
-          if (dryRun) {
-            return {
-              kind: "dry_run",
-              token_preview: tokenRaw.slice(0, 16) + "…",
-              bestWateringDate: bestDate,
-              message: messageBody,
-            };
-          }
-
-          const r = await sendFcm(accessToken, tokenRaw, title, messageBody, {
-            kind: "daily",
-            sent_at: new Date().toISOString(),
-            timezone: rain.timezone,
-            best_watering_date: bestDate,
-            rain_last7_mm: rain.rainLast7.toFixed(1),
-            rain_next3_mm: rain.rainNext3.toFixed(1),
-          });
-
-          if (r.ok) {
-            sent++;
-            return { kind: "sent" };
-          }
-
-          return {
-            kind: "error",
-            status: r.status,
-            json: r.json,
-            token_preview: tokenRaw.slice(0, 24) + "…",
-          };
+          return { kind: "sent" };
         }),
       );
 
@@ -500,6 +571,7 @@ Deno.serve(async (req) => {
         in_window: inWindow,
         attempted,
         sent,
+        pruning_sent: pruningSent,
         skipped_legacy_apns: skippedLegacy,
         errors: errors.slice(0, 10),
       },

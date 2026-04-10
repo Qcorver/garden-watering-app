@@ -27,7 +27,7 @@ async function proxyFetch(params, signal) {
  * Search locations for autocomplete.
  * Returns normalized results: [{ label, value, lat, lon }]
  */
-export async function searchLocations(query, limit = 6, signal) {
+export async function searchLocations(query, limit = 6, signal, lang = "en") {
   const q = (query || "").trim();
   if (q.length < 2) return [];
 
@@ -35,10 +35,11 @@ export async function searchLocations(query, limit = 6, signal) {
 
   return (data || []).map((loc) => {
     const name = loc?.name ?? "";
+    const localName = loc?.local_names?.[lang] ?? name;
     const country = loc?.country ?? "";
     const state = loc?.state ?? null;
 
-    const label = state ? `${name}, ${state}, ${country}` : `${name}, ${country}`;
+    const label = state ? `${localName}, ${state}, ${country}` : `${localName}, ${country}`;
     const value = country ? `${name},${country}` : name;
 
     return { label, value, lat: loc?.lat, lon: loc?.lon };

@@ -1,6 +1,35 @@
 // Canonical watering logic — shared between frontend and push-daily edge function.
 // If you change this file, both consumers pick up the change automatically.
 
+// ---------- i18n messages ----------
+
+type Lang = "en" | "nl";
+
+const MESSAGES = {
+  en: {
+    recentRain: "No watering needed — the soil is likely still wet from recent rain.",
+    recentWatering: "No watering needed — you watered recently and the soil should still be moist.",
+    weeklyRain: "No watering needed — accumulated rainfall this week has adequately moistened the soil.",
+    upcomingRain: "No watering needed — enough rain is expected in the coming days.",
+    waterNeeded: (min: number) =>
+      `Rain is not sufficient this week. Watering recommended: about ${min} min per m².`,
+  },
+  nl: {
+    recentRain: "Geen besproeïng nodig — de grond is waarschijnlijk nog nat van de recente regen.",
+    recentWatering: "Geen besproeïng nodig — je hebt recent gesproeid en de grond zou nog vochtig moeten zijn.",
+    weeklyRain: "Geen besproeïng nodig — de neerslag deze week heeft de grond voldoende bevochtigd.",
+    upcomingRain: "Geen besproeïng nodig — er wordt de komende dagen voldoende regen verwacht.",
+    waterNeeded: (min: number) =>
+      `Te weinig regen deze week. Sproeien aanbevolen: ongeveer ${min} min per m².`,
+  },
+} satisfies Record<Lang, {
+  recentRain: string;
+  recentWatering: string;
+  weeklyRain: string;
+  upcomingRain: string;
+  waterNeeded: (min: number) => string;
+}>;
+
 // Baseline weekly water target (mm). Used only as fallback when no temperature data is available.
 export const WEEKLY_TARGET = 20; // mm
 
@@ -9,7 +38,7 @@ export const DRY_DAY_THRESHOLD = 1; // mm
 
 // Assumed watering application rate for converting mm deficit → minutes.
 // 7.5 L/min per m² based on measured hose output of 2L per 16s.
-export const WATERING_RATE_L_PER_MIN = 7.5; // L/min per m²
+export const WATERING_RATE_L_PER_MIN = 15; // L/min per m²
 
 // "Soil likely still wet" gates (tweakable). Scaled by seasonFactor at runtime.
 export const WET_48H_MM = 3; // mm in last 2 days
@@ -124,6 +153,7 @@ export function calculateWateringAdvice({
   lastWateredDate = null,
   tempLast7 = [],
   latitude = null,
+  lang = "en",
 }: {
   rainLast7: number;
   rainLast2Days?: number;
@@ -135,6 +165,7 @@ export function calculateWateringAdvice({
   lastWateredDate?: Date | null;
   tempLast7?: Array<{ date: Date; tmax: number; tmin: number }>;
   latitude?: number | null;
+  lang?: Lang;
 }) {
   const _rainLast7 = safeNum(rainLast7);
   const _rainLast2 = safeNum(rainLast2Days);
@@ -144,6 +175,7 @@ export function calculateWateringAdvice({
   const _rainNext3 = safeNum(rainNext3);
 
   const forecast = Array.isArray(dailyForecastNext5) ? dailyForecastNext5 : [];
+  const msg = MESSAGES[lang] ?? MESSAGES.en;
 
   const seasonFactor = getSeasonFactor();
   // Use ET₀-based target when temperature + latitude are available; fall back to season factor.
@@ -210,7 +242,7 @@ export function calculateWateringAdvice({
       weeklyRainCoverage,
       deficitLitersPerM2,
       deficitMinutesPerM2,
-      message: "No watering needed — the soil is likely still wet from recent rain.",
+      message: msg.recentRain,
       ...debugFields,
     };
   }
@@ -224,7 +256,7 @@ export function calculateWateringAdvice({
       weeklyRainCoverage,
       deficitLitersPerM2,
       deficitMinutesPerM2,
-      message: "No watering needed — you watered recently and the soil should still be moist.",
+      message: msg.recentWatering,
       ...debugFields,
     };
   }
@@ -240,11 +272,16 @@ export function calculateWateringAdvice({
   if (_rainLast7 >= weeklyTarget * 0.8) {
     shouldWater = false;
     noWaterReason = "recent_rain";
-    message = "No watering needed — accumulated rainfall this week has adequately moistened the soil.";
+    message = msg.weeklyRain;
   } else if (weeklyRainCoverage >= weeklyTarget) {
     shouldWater = false;
     noWaterReason = "upcoming_rain";
-    message = "No watering needed — enough rain is expected in the coming days.";
+    message = msg.upcomingRain;
+  } else if (deficitMinutesPerM2 === 0) {
+    // Deficit exists but rounds to 0 minutes — not worth watering.
+    shouldWater = false;
+    noWaterReason = "recent_rain";
+    message = msg.weeklyRain;
   } else {
     shouldWater = true;
     noWaterReason = null;
@@ -253,7 +290,7 @@ export function calculateWateringAdvice({
     const dryDay = forecast.find((day) => safeNum(day?.rainMm) < DRY_DAY_THRESHOLD);
     bestWateringDate = dryDay?.date ?? forecast[0]?.date ?? null;
 
-    message = `Rain is not sufficient this week. Watering recommended: about ${deficitMinutesPerM2} min per m².`;
+    message = msg.waterNeeded(deficitMinutesPerM2);
   }
 
   return {
