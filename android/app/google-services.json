@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "124955638812",
+    "project_id": "garden-watering-app",
+    "storage_bucket": "garden-watering-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:124955638812:android:0b2a50b51c9852d73273d9",
+        "android_client_info": {
+          "package_name": "com.qcorver.whentowater"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCctDflq-wPTOIhmcEf_dBxBsHyXOuIpEo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
