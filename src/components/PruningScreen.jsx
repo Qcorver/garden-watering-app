@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { searchPlants, getPlantDetails } from "../api/perenualClient";
+import { createPortal } from "react-dom";
+import { searchPlants, getPlantDetails, enrichPlant } from "../api/perenualClient";
 import { compressImage, identifyPlant } from "../api/plantIdentifyClient";
 import "./PruningScreen.css";
-import { t, strings } from "../i18n";
+import { t, strings, translatePlantValue } from "../i18n";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -31,7 +32,7 @@ function deduplicateBySpecies(plants, max = 3) {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 // Always English — used as data keys for matching Perenual API data
-const MONTH_NAMES_EN = [
+export const MONTH_NAMES_EN = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
@@ -57,9 +58,27 @@ function saveGardenPlants(plants) {
   } catch { /* ignore */ }
 }
 
+// ── Hemisphere helpers ────────────────────────────────────────────────────────
+
+/**
+ * Perenual data is Northern-Hemisphere-centric. For Southern Hemisphere users
+ * (latitude < 0) we shift every pruning month by 6 so the seasons align.
+ * e.g. stored "March" (NH autumn) → displayed as "September" (SH autumn).
+ */
+export function shiftMonth6(monthName) {
+  const idx = MONTH_NAMES_EN.indexOf(monthName);
+  if (idx === -1) return monthName;
+  return MONTH_NAMES_EN[(idx + 6) % 12];
+}
+
+export function adaptPruningMonths(months, isSH) {
+  if (!isSH || !months) return months;
+  return months.map(shiftMonth6);
+}
+
 // ── Sorting / status helpers ──────────────────────────────────────────────────
 
-function monthsUntilNextPruning(pruningMonths, currentMonthIdx) {
+export function monthsUntilNextPruning(pruningMonths, currentMonthIdx) {
   if (!pruningMonths || pruningMonths.length === 0) return 13;
   const indices = pruningMonths
     .map((m) => MONTH_NAMES_EN.indexOf(m))
@@ -68,20 +87,35 @@ function monthsUntilNextPruning(pruningMonths, currentMonthIdx) {
   return Math.min(...indices.map((m) => (m - currentMonthIdx + 12) % 12));
 }
 
-function sortPlants(plants) {
+export function sortPlants(plants, isSH = false) {
   const currentMonth = new Date().getMonth();
   return [...plants].sort((a, b) => {
-    const da = monthsUntilNextPruning(a.pruningMonths, currentMonth);
-    const db = monthsUntilNextPruning(b.pruningMonths, currentMonth);
+    const da = monthsUntilNextPruning(adaptPruningMonths(a.pruningMonths, isSH), currentMonth);
+    const db = monthsUntilNextPruning(adaptPruningMonths(b.pruningMonths, isSH), currentMonth);
     return da - db;
   });
 }
 
+/**
+ * Auto-detect watering category from plant fields.
+ * Priority: inPot > tree cycle > low maintenance > annual/biennial > border (default).
+ */
+export function detectWaterCategory(plant) {
+  if (plant.inPot) return "pots";
+  const cycle = (plant.cycle ?? "").toLowerCase();
+  const maintenance = (plant.maintenance ?? "").toLowerCase();
+  if (cycle.includes("tree")) return "trees";
+  if (maintenance === "low") return "drought";
+  if (cycle.includes("annual") || cycle.includes("biennial")) return "vegetable";
+  return "border";
+}
+
 /** Returns 'now' if current month is in pruning window, 'soon' if next month, else null */
-function getPruningStatus(pruningMonths) {
+export function getPruningStatus(pruningMonths, isSH = false) {
   if (!pruningMonths || pruningMonths.length === 0) return null;
+  const adapted = adaptPruningMonths(pruningMonths, isSH);
   const cur = new Date().getMonth();
-  const indices = pruningMonths.map((m) => MONTH_NAMES_EN.indexOf(m)).filter((i) => i >= 0);
+  const indices = adapted.map((m) => MONTH_NAMES_EN.indexOf(m)).filter((i) => i >= 0);
   if (indices.includes(cur)) return "now";
   if (indices.includes((cur + 1) % 12)) return "soon";
   return null;
@@ -89,12 +123,13 @@ function getPruningStatus(pruningMonths) {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function MonthBlocks({ pruningMonths, large = false }) {
+export function MonthBlocks({ pruningMonths, large = false, isSH = false }) {
   const currentMonth = new Date().getMonth();
+  const adapted = adaptPruningMonths(pruningMonths, isSH);
   return (
     <div className={`pruning-month-blocks${large ? " pruning-month-blocks--large" : ""}`}>
       {MONTH_ABBR_EN.map((abbr, i) => {
-        const isPruning = pruningMonths?.includes(MONTH_NAMES_EN[i]);
+        const isPruning = adapted?.includes(MONTH_NAMES_EN[i]);
         const isCurrent = i === currentMonth;
         return (
           <div
@@ -114,7 +149,7 @@ function MonthBlocks({ pruningMonths, large = false }) {
   );
 }
 
-function PlantThumbnail({ imageUrl, commonName }) {
+export function PlantThumbnail({ imageUrl, commonName }) {
   const [failed, setFailed] = useState(false);
   if (!imageUrl || failed) {
     return <div className="pruning-plant-thumb pruning-plant-thumb--fallback">🌿</div>;
@@ -131,10 +166,10 @@ function PlantThumbnail({ imageUrl, commonName }) {
 
 // ── Custom select (avoids iOS native picker / keyboard jump bug) ──────────────
 
-function CustomSelect({ value, onChange, options }) {
+export function CustomSelect({ value, onChange, options, placeholder = null, openUp = false }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  const selected = options.find((o) => o.value === value) ?? options[0];
+  const selected = options.find((o) => o.value === value) ?? null;
 
   useEffect(() => {
     if (!open) return;
@@ -150,13 +185,13 @@ function CustomSelect({ value, onChange, options }) {
   }, [open]);
 
   return (
-    <div className={`pruning-custom-select${open ? " pruning-custom-select--open" : ""}`} ref={ref}>
+    <div className={`pruning-custom-select${open ? " pruning-custom-select--open" : ""}${openUp ? " pruning-custom-select--up" : ""}`} ref={ref}>
       <button
         type="button"
-        className="pruning-custom-select-btn"
+        className={`pruning-custom-select-btn${!selected ? " pruning-custom-select-btn--placeholder" : ""}`}
         onClick={() => setOpen((v) => !v)}
       >
-        <span>{selected.icon} {selected.label}</span>
+        <span>{selected ? (selected.icon ? `${selected.icon} ${selected.label}` : selected.label) : (placeholder ?? "—")}</span>
         <svg className="pruning-custom-select-arrow" width="12" height="8" viewBox="0 0 12 8" fill="none">
           <path d="M1 1l5 5 5-5" stroke="#9aab94" strokeWidth="1.5" strokeLinecap="round"/>
         </svg>
@@ -171,7 +206,7 @@ function CustomSelect({ value, onChange, options }) {
               onClick={() => { onChange(o.value); setOpen(false); }}
             >
               {o.value === value && <span className="pruning-custom-select-check">✓</span>}
-              {o.icon} {o.label}
+              {o.icon ? `${o.icon} ` : ""}{o.label}
             </button>
           ))}
         </div>
@@ -182,7 +217,7 @@ function CustomSelect({ value, onChange, options }) {
 
 // ── Context menu (3-dot) ──────────────────────────────────────────────────────
 
-function ContextMenu({ onEdit, onRemove, onClose, lang }) {
+export function ContextMenu({ onEdit, onRemove, onClose, lang }) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -202,6 +237,7 @@ function ContextMenu({ onEdit, onRemove, onClose, lang }) {
       <button
         type="button"
         className="pruning-context-item"
+        onTouchEnd={(e) => { e.preventDefault(); onEdit(); onClose(); }}
         onClick={() => { onEdit(); onClose(); }}
       >
         {t(lang, "pruneEdit")}
@@ -209,6 +245,7 @@ function ContextMenu({ onEdit, onRemove, onClose, lang }) {
       <button
         type="button"
         className="pruning-context-item pruning-context-item--danger"
+        onTouchEnd={(e) => { e.preventDefault(); onRemove(); onClose(); }}
         onClick={() => { onRemove(); onClose(); }}
       >
         {t(lang, "pruneRemove")}
@@ -219,9 +256,9 @@ function ContextMenu({ onEdit, onRemove, onClose, lang }) {
 
 // ── Plant row ─────────────────────────────────────────────────────────────────
 
-function PlantRow({ plant, onTap, onEdit, onRemove, lang }) {
+export function PlantRow({ plant, onTap, onEdit, onRemove, lang, isSH = false }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const status = getPruningStatus(plant.pruningMonths);
+  const status = getPruningStatus(plant.pruningMonths, isSH);
 
   return (
     <div className="pruning-plant-row" onClick={() => !menuOpen && onTap(plant)}>
@@ -238,7 +275,7 @@ function PlantRow({ plant, onTap, onEdit, onRemove, lang }) {
           )}
         </div>
         <span className="pruning-plant-scientific">{plant.scientificName}</span>
-        <MonthBlocks pruningMonths={plant.pruningMonths} />
+        <MonthBlocks pruningMonths={plant.pruningMonths} isSH={isSH} />
       </div>
 
       <div className="pruning-dots-wrap" onClick={(e) => e.stopPropagation()}>
@@ -265,15 +302,28 @@ function PlantRow({ plant, onTap, onEdit, onRemove, lang }) {
 
 // ── Plant detail popup ────────────────────────────────────────────────────────
 
-function PlantDetailPopup({ plant, onClose, lang }) {
-  const pruningText = plant.pruningMonths?.length
-    ? plant.pruningMonths.join(", ")
+export function PlantDetailPopup({ plant, onClose, lang, isSH = false, seasonLabel = null }) {
+  const [description, setDescription] = useState(plant.description ?? null);
+
+  useEffect(() => {
+    setDescription(plant.description ?? null);
+    if (!plant.perenualId || lang === "en") return;
+    const controller = new AbortController();
+    getPlantDetails(plant.perenualId, controller.signal, lang)
+      .then((details) => { if (details.description) setDescription(details.description); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [plant.perenualId, lang]);
+
+  const adaptedMonths = adaptPruningMonths(plant.pruningMonths, isSH);
+  const pruningText = adaptedMonths?.length
+    ? adaptedMonths.join(", ")
     : t(lang, "pruneNoData");
 
   const lightOptions = [
-    { value: "sun",        label: t(lang, "lightFullSun"),   icon: "☀️" },
-    { value: "half-shade", label: t(lang, "lightHalfShade"), icon: "⛅" },
-    { value: "shade",      label: t(lang, "lightShade"),     icon: "🌚" },
+    { value: "sun",        label: t(lang, "lightFullSun") },
+    { value: "half-shade", label: t(lang, "lightHalfShade") },
+    { value: "shade",      label: t(lang, "lightShade") },
   ];
 
   return (
@@ -290,8 +340,8 @@ function PlantDetailPopup({ plant, onClose, lang }) {
           <p className="pruning-detail-scientific">{plant.scientificName}</p>
 
           <div className="pruning-detail-section">
-            <span className="pruning-detail-label">{t(lang, "pruneWindowLabel")}</span>
-            <MonthBlocks pruningMonths={plant.pruningMonths} large />
+            <span className="pruning-detail-label">{seasonLabel ?? t(lang, "pruneWindowLabel")}</span>
+            <MonthBlocks pruningMonths={plant.pruningMonths} large isSH={isSH} />
             <span className="pruning-detail-months">{pruningText}</span>
           </div>
 
@@ -299,26 +349,25 @@ function PlantDetailPopup({ plant, onClose, lang }) {
             {plant.cycle && (
               <div className="pruning-detail-cell">
                 <span className="pruning-detail-cell-label">{t(lang, "pruneCycle")}</span>
-                <span className="pruning-detail-cell-value">{plant.cycle}</span>
+                <span className="pruning-detail-cell-value">{translatePlantValue(lang, "cycle", plant.cycle)}</span>
               </div>
             )}
             {plant.maintenance && (
               <div className="pruning-detail-cell">
                 <span className="pruning-detail-cell-label">{t(lang, "pruneMaintenance")}</span>
-                <span className="pruning-detail-cell-value">{plant.maintenance}</span>
+                <span className="pruning-detail-cell-value">{translatePlantValue(lang, "maintenance", plant.maintenance)}</span>
               </div>
             )}
             {plant.sunlight?.length > 0 && (
               <div className="pruning-detail-cell pruning-detail-cell--wide">
                 <span className="pruning-detail-cell-label">{t(lang, "pruneSunlight")}</span>
-                <span className="pruning-detail-cell-value">{plant.sunlight.join(", ")}</span>
+                <span className="pruning-detail-cell-value">{plant.sunlight.map(s => translatePlantValue(lang, "sunlight", s)).join(", ")}</span>
               </div>
             )}
             {plant.lightCondition && (
               <div className="pruning-detail-cell">
                 <span className="pruning-detail-cell-label">{t(lang, "pruneYourSetting")}</span>
                 <span className="pruning-detail-cell-value">
-                  {lightOptions.find((o) => o.value === plant.lightCondition)?.icon}{" "}
                   {lightOptions.find((o) => o.value === plant.lightCondition)?.label}
                 </span>
               </div>
@@ -331,8 +380,8 @@ function PlantDetailPopup({ plant, onClose, lang }) {
             </div>
           </div>
 
-          {plant.description && (
-            <p className="pruning-detail-description">{plant.description}</p>
+          {description && (
+            <p className="pruning-detail-description">{description}</p>
           )}
         </div>
       </div>
@@ -342,17 +391,24 @@ function PlantDetailPopup({ plant, onClose, lang }) {
 
 // ── Add / Edit plant popup ────────────────────────────────────────────────────
 
-function AddPlantPopup({ initialPlant, onSave, onClose, lang }) {
+export function AddPlantPopup({ initialPlant, onSave, onClose, lang, isSH = false, seasonLabel = null }) {
   const isEditing = !!initialPlant;
 
   const lightOptions = [
-    { value: "sun",        label: t(lang, "lightFullSun"),   icon: "☀️" },
-    { value: "half-shade", label: t(lang, "lightHalfShade"), icon: "⛅" },
-    { value: "shade",      label: t(lang, "lightShade"),     icon: "🌚" },
+    { value: "sun",        label: t(lang, "lightFullSun") },
+    { value: "half-shade", label: t(lang, "lightHalfShade") },
+    { value: "shade",      label: t(lang, "lightShade") },
   ];
   const locationOptions = [
-    { value: "ground", label: t(lang, "locationInGround"), icon: "🌱" },
-    { value: "pot",    label: t(lang, "locationInPot"),    icon: "🪴" },
+    { value: "ground", label: t(lang, "locationInGround") },
+    { value: "pot",    label: t(lang, "locationInPot") },
+  ];
+  const categoryOptions = [
+    { value: "vegetable", label: t(lang, "catVegetable"), icon: "🥕" },
+    { value: "border",    label: t(lang, "catBorder"),    icon: "🌸" },
+    { value: "drought",   label: t(lang, "catDrought"),   icon: "🌵" },
+    { value: "trees",     label: t(lang, "catTrees"),     icon: "🌳" },
+    { value: "pots",      label: t(lang, "catPots"),      icon: "🪴" },
   ];
 
   const [query, setQuery] = useState(isEditing ? initialPlant.commonName : "");
@@ -374,10 +430,14 @@ function AddPlantPopup({ initialPlant, onSave, onClose, lang }) {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [lightCondition, setLightCondition] = useState(initialPlant?.lightCondition ?? "sun");
   const [inPot, setInPot] = useState(initialPlant?.inPot ?? false);
+  const [waterCategory, setWaterCategory] = useState(
+    isEditing ? (initialPlant.waterCategory ?? detectWaterCategory(initialPlant)) : null
+  );
 
   const [recognizing, setRecognizing] = useState(false);
   const [recognitionMatches, setRecognitionMatches] = useState(null); // null = not yet run
   const [recognitionError, setRecognitionError] = useState(null);
+  const [enriching, setEnriching] = useState(false);
 
   const debounceRef = useRef(null);
   const abortRef = useRef(null);
@@ -497,9 +557,39 @@ function AddPlantPopup({ initialPlant, onSave, onClose, lang }) {
     setRecognitionMatches(null);
     if (match.dbId) {
       await handleSelectResult({ id: match.dbId });
-    } else {
-      // Plant not in our DB — pre-fill search so user can try manually
+      return;
+    }
+    // Plant not in DB — enrich on the spot via Claude Haiku + Wikidata
+    setEnriching(true);
+    try {
+      const newId = await enrichPlant(match.scientificName, match.commonName, abortRef.current?.signal);
+      await handleSelectResult({ id: newId });
+    } catch {
+      setRecognitionError(t(lang, "pruneEnrichError"));
       setQuery(match.scientificName);
+    } finally {
+      setEnriching(false);
+    }
+  }
+
+  // Auto-update waterCategory when inPot or selected species changes (only when adding).
+  useEffect(() => {
+    if (isEditing) return;
+    if (!selectedSpecies && !inPot) {
+      setWaterCategory(null);
+      return;
+    }
+    setWaterCategory(detectWaterCategory({ ...(selectedSpecies ?? {}), inPot }));
+  }, [inPot, selectedSpecies, isEditing]);
+
+  function handleInPotChange(v) {
+    const newInPot = v === "pot";
+    setInPot(newInPot);
+    // Immediately sync category: pot toggle overrides everything else.
+    if (newInPot) {
+      setWaterCategory("pots");
+    } else if (waterCategory === "pots") {
+      setWaterCategory(detectWaterCategory({ ...(selectedSpecies ?? {}), inPot: false }));
     }
   }
 
@@ -518,10 +608,11 @@ function AddPlantPopup({ initialPlant, onSave, onClose, lang }) {
       description: selectedSpecies.description,
       lightCondition,
       inPot,
+      waterCategory,
     });
   }
 
-  const canSave = !!selectedSpecies && !loadingDetails;
+  const canSave = !!selectedSpecies && !loadingDetails && !!waterCategory;
 
   return (
     <div className="pruning-overlay" onClick={onClose}>
@@ -541,7 +632,14 @@ function AddPlantPopup({ initialPlant, onSave, onClose, lang }) {
             accept="image/*"
             capture="environment"
             style={{ display: "none" }}
-            onChange={(e) => handleCameraCapture(e.target.files?.[0])}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              // Reset value immediately so the same file (or a new capture)
+              // always triggers onChange on Android WebView — without this,
+              // subsequent taps on the camera button silently do nothing.
+              e.target.value = "";
+              handleCameraCapture(file);
+            }}
           />
 
           <div className="pruning-search-wrap">
@@ -589,6 +687,14 @@ function AddPlantPopup({ initialPlant, onSave, onClose, lang }) {
             </div>
           )}
 
+          {/* Enriching spinner (plant recognized but not yet in DB) */}
+          {enriching && (
+            <div className="pruning-loading-details">
+              <div className="pruning-spinner" />
+              <span>{t(lang, "pruneEnriching")}</span>
+            </div>
+          )}
+
           {/* Recognition error */}
           {recognitionError && (
             <div className="pruning-recognition-error">{recognitionError}</div>
@@ -628,7 +734,13 @@ function AddPlantPopup({ initialPlant, onSave, onClose, lang }) {
           {results.length > 0 && !selectedSpecies && !recognitionMatches && (
             <div className="pruning-search-results">
               {searching && <div className="pruning-search-spinner">{t(lang, "pruneSearching")}</div>}
-              {results.map((item, index) => (
+              {(() => {
+                const maxScore = Math.max(...results.map((r) => r.popularity_nl ?? 0));
+                let badgeGiven = false;
+                return results.map((item) => {
+                  const showBadge = results.length > 1 && !badgeGiven && (item.popularity_nl ?? 0) === maxScore;
+                  if (showBadge) badgeGiven = true;
+                  return (
                 <button
                   key={item.id}
                   type="button"
@@ -637,7 +749,7 @@ function AddPlantPopup({ initialPlant, onSave, onClose, lang }) {
                 >
                   <div className="pruning-result-row">
                     <span className="pruning-result-name">{item.common_name}</span>
-                    {index === 0 && <span className="pruning-result-popular">{t(lang, "pruneMostCommon")}</span>}
+                    {showBadge && <span className="pruning-result-popular">{t(lang, "pruneMostCommon")}</span>}
                   </div>
                   <span className="pruning-result-sci">
                     {Array.isArray(item.scientific_name)
@@ -645,7 +757,9 @@ function AddPlantPopup({ initialPlant, onSave, onClose, lang }) {
                       : item.scientific_name}
                   </span>
                 </button>
-              ))}
+                  );
+                });
+              })()}
             </div>
           )}
 
@@ -675,10 +789,10 @@ function AddPlantPopup({ initialPlant, onSave, onClose, lang }) {
                 <span className="pruning-selected-sci">{selectedSpecies.scientificName}</span>
                 {selectedSpecies.pruningMonths?.length > 0 ? (
                   <>
-                    <span className="pruning-selected-prune-label">{t(lang, "pruneWindowLabel")}</span>
-                    <MonthBlocks pruningMonths={selectedSpecies.pruningMonths} />
+                    <span className="pruning-selected-prune-label">{seasonLabel ?? t(lang, "pruneWindowLabel")}</span>
+                    <MonthBlocks pruningMonths={selectedSpecies.pruningMonths} isSH={isSH} />
                     <span className="pruning-selected-prune-months">
-                      {selectedSpecies.pruningMonths.join(", ")}
+                      {adaptPruningMonths(selectedSpecies.pruningMonths, isSH).join(", ")}
                     </span>
                   </>
                 ) : (
@@ -702,8 +816,18 @@ function AddPlantPopup({ initialPlant, onSave, onClose, lang }) {
               <label className="pruning-dropdown-label">{t(lang, "pruneLocationLabel")}</label>
               <CustomSelect
                 value={inPot ? "pot" : "ground"}
-                onChange={(v) => setInPot(v === "pot")}
+                onChange={handleInPotChange}
                 options={locationOptions}
+              />
+            </div>
+            <div className="pruning-dropdown-group pruning-dropdown-group--full">
+              <label className="pruning-dropdown-label">{t(lang, "catWateringCategory")}</label>
+              <CustomSelect
+                value={waterCategory}
+                onChange={setWaterCategory}
+                options={categoryOptions}
+                placeholder={t(lang, "catSelectPlaceholder")}
+                openUp
               />
             </div>
           </div>
@@ -730,11 +854,13 @@ function AddPlantPopup({ initialPlant, onSave, onClose, lang }) {
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
-export function PruningScreen({ onSyncPlants, lang = "en" }) {
+export function PruningScreen({ onSyncPlants, lang = "en", latitude = null }) {
+  const isSH = typeof latitude === "number" && latitude < 0;
   const [plants, setPlants] = useState(() => sortPlants(loadGardenPlants()));
   const [detailPlant, setDetailPlant] = useState(null);
   const [addPopupOpen, setAddPopupOpen] = useState(false);
   const [editingPlant, setEditingPlant] = useState(null);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   // Persist + sync on every change
   useEffect(() => {
@@ -748,7 +874,7 @@ export function PruningScreen({ onSyncPlants, lang = "en" }) {
       const updated = exists
         ? prev.map((p) => (p.id === plantData.id ? plantData : p))
         : [...prev, plantData];
-      return sortPlants(updated);
+      return sortPlants(updated, isSH);
     });
     setAddPopupOpen(false);
     setEditingPlant(null);
@@ -770,7 +896,16 @@ export function PruningScreen({ onSyncPlants, lang = "en" }) {
     <div className="pruning-screen">
       {/* Hero */}
       <header className="pruning-hero">
-        <p className="pruning-hero-app-title">{t(lang, "pruneAppTitle")}</p>
+        <div className="pruning-hero-top-row">
+          <button
+            type="button"
+            className="pruning-info-btn"
+            onClick={() => setInfoOpen(true)}
+            aria-label="More info"
+          >
+            ⓘ
+          </button>
+        </div>
         <div className="pruning-hero-title-row">
           <div>
             <h1 className="pruning-hero-heading">{t(lang, "pruneHeroHeading")}</h1>
@@ -801,25 +936,29 @@ export function PruningScreen({ onSyncPlants, lang = "en" }) {
                 onEdit={handleEdit}
                 onRemove={handleRemovePlant}
                 lang={lang}
+                isSH={isSH}
               />
             ))}
           </div>
         )}
       </div>
 
-      {/* FAB */}
-      <button
-        type="button"
-        className="pruning-fab"
-        onClick={() => { setEditingPlant(null); setAddPopupOpen(true); }}
-        aria-label={t(lang, "pruneAddAriaLabel")}
-      >
-        +
-      </button>
+      {/* FAB — portalled to body so it's not clipped by the overflow-y:auto scroll container */}
+      {createPortal(
+        <button
+          type="button"
+          className="pruning-fab"
+          onClick={() => { setEditingPlant(null); setAddPopupOpen(true); }}
+          aria-label={t(lang, "pruneAddAriaLabel")}
+        >
+          +
+        </button>,
+        document.body
+      )}
 
       {/* Detail popup */}
       {detailPlant && (
-        <PlantDetailPopup plant={detailPlant} onClose={() => setDetailPlant(null)} lang={lang} />
+        <PlantDetailPopup plant={detailPlant} onClose={() => setDetailPlant(null)} lang={lang} isSH={isSH} />
       )}
 
       {/* Add / Edit popup */}
@@ -829,7 +968,19 @@ export function PruningScreen({ onSyncPlants, lang = "en" }) {
           onSave={handleSavePlant}
           onClose={() => { setAddPopupOpen(false); setEditingPlant(null); }}
           lang={lang}
+          isSH={isSH}
         />
+      )}
+
+      {/* Info sheet */}
+      {infoOpen && (
+        <div className="pruning-overlay" onClick={() => setInfoOpen(false)}>
+          <div className="pruning-info-sheet" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="pruning-sheet-close" onClick={() => setInfoOpen(false)}>✕</button>
+            <h3 className="pruning-info-sheet-title">{t(lang, "pruneInfoTitle")}</h3>
+            <p className="pruning-info-sheet-body">{t(lang, "pruneInfoBody")}</p>
+          </div>
+        </div>
       )}
     </div>
   );

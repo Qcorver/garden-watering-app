@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy – Furrow</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #2c2c2c;
+      background: #f7f9f4;
+      line-height: 1.7;
+      font-size: 16px;
+    }
+    .container { max-width: 680px; margin: 0 auto; padding: 3rem 1.5rem 4rem; }
+    .header {
+      margin-bottom: 2.5rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 2px solid #3a7d44;
+    }
+    .header h1 { font-size: 1.75rem; font-weight: 700; color: #3a7d44; margin-bottom: 0.25rem; }
+    .header .app-name { font-size: 1rem; color: #6b7b6e; font-weight: 500; }
+    .header .updated { font-size: 0.85rem; color: #9aa89c; margin-top: 0.5rem; }
+    .intro { margin-bottom: 2rem; color: #4a5a4c; }
+    h2 { font-size: 1.15rem; font-weight: 700; color: #2c3e2e; margin-top: 2rem; margin-bottom: 0.75rem; }
+    h2 .num { color: #3a7d44; margin-right: 0.25rem; }
+    p { margin-bottom: 1rem; color: #3d4a3e; }
+    ul { list-style: none; padding: 0; margin-bottom: 1rem; }
+    ul li {
+      position: relative;
+      padding-left: 1.25rem;
+      margin-bottom: 0.75rem;
+      color: #3d4a3e;
+    }
+    ul li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0.65rem;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #3a7d44;
+    }
+    strong { font-weight: 600; color: #2c3e2e; }
+    a { color: #3a7d44; text-decoration: underline; text-underline-offset: 2px; }
+    a:hover { color: #2a5d32; }
+    .contact-email {
+      display: inline-block;
+      background: #e8f0e4;
+      padding: 0.25rem 0.75rem;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+    @media (max-width: 600px) {
+      .container { padding: 2rem 1.25rem 3rem; }
+      .header h1 { font-size: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Privacy Policy</h1>
+      <div class="app-name">Furrow</div>
+      <div class="updated">Last updated: April 2026</div>
+    </div>
+
+    <p class="intro">Furrow ("the app") is a garden watering app that uses weather data and evapotranspiration science to provide personalised watering and pruning recommendations. This privacy policy explains what data we collect, why, and how we use it.</p>
+
+    <h2><span class="num">1.</span> Data we collect</h2>
+    <ul>
+      <li><strong>Location data</strong> — The city name or coordinates you provide (or share via GPS), used solely to retrieve weather data for your area. Your location is stored in our database so that daily push notifications are based on the correct location. You can update or clear your location at any time in the Settings tab.</li>
+      <li><strong>Anonymous user ID</strong> — On first use, an anonymous session is created automatically via Supabase. No account, name, email address, or password is required.</li>
+      <li><strong>FCM push token</strong> — If you enable push notifications, we store a device token (Google Firebase Cloud Messaging) to send you daily watering and pruning reminders. This token is linked to your anonymous user ID. You can disable notifications at any time.</li>
+      <li><strong>Watering history</strong> — The days on which you mark that you have watered your garden are stored both on your device (local storage) and in our database, linked to your anonymous user ID. This keeps push notification advice consistent with in-app advice across sessions and reinstalls.</li>
+      <li><strong>Garden plant data</strong> — If you add plants to your personal garden library, we store the plant species name, common name, pruning months, watering category, planting location (pot or ground), light preference, and thumbnail image URL in our database, linked to your anonymous user ID. This data is used to provide personalised watering advice per plant category and to send pruning reminders.</li>
+      <li><strong>Camera &amp; plant recognition</strong> — If you use the camera feature to identify a plant, the photo is sent to a plant-recognition service for processing. The photo is not stored by us; it is used only to return a species identification and is discarded immediately afterwards.</li>
+    </ul>
+
+    <h2><span class="num">2.</span> How we use your data</h2>
+    <ul>
+      <li>Fetching weather data (Open-Meteo, OpenWeather) to calculate watering advice tailored to your location.</li>
+      <li>Sending daily push notifications with watering recommendations based on the forecast and your recent watering history.</li>
+      <li>Sending monthly pruning reminders for the plants in your garden library.</li>
+      <li>Providing per-plant-category watering advice within the app.</li>
+      <li>Keeping the app functional. Your data is never sold or shared with third parties for marketing purposes.</li>
+    </ul>
+
+    <h2><span class="num">3.</span> Third parties</h2>
+    <ul>
+      <li><strong>Supabase</strong> — Database hosting (EU region, Ireland) for anonymous user IDs, location, push tokens, watering history, and garden plant data.</li>
+      <li><strong>Open-Meteo</strong> — Free weather service for historical rainfall and temperature data; no API key or personal data is transmitted.</li>
+      <li><strong>OpenWeather</strong> — Weather forecast via a server-side proxy; only your city name is sent, no further personal data.</li>
+      <li><strong>Google Firebase (FCM)</strong> — Push notifications; your device token is processed by Google in accordance with <a href="https://policies.google.com/privacy">Google's Privacy Policy</a>.</li>
+      <li><strong>Plant recognition service</strong> — When you use the camera feature, the photo is sent to a plant-recognition API for identification only. The photo is not retained beyond this request.</li>
+    </ul>
+
+    <h2><span class="num">4.</span> Data storage and retention</h2>
+    <p>Location, push token, watering history, and garden plant data are retained for as long as you use the app. You can disable push notifications at any time within the app, which removes your push token from our database. You can delete individual plants from your garden library within the app.</p>
+    <p>There is no account deletion flow in the traditional sense, because no personally identifiable account exists — the anonymous session contains no information that can be traced back to you as an individual. If you uninstall the app, the anonymous session data remains stored but is no longer associated with any active device.</p>
+
+    <h2><span class="num">5.</span> Your rights (GDPR)</h2>
+    <p>Because we process only anonymous data that cannot be linked to an identified individual, most GDPR rights (access, rectification, erasure) are not applicable in the standard sense. We do not have a way to look up which data belongs to you without your anonymous user ID. If you have any questions or requests, please contact us at the email address below.</p>
+
+    <h2><span class="num">6.</span> Contact</h2>
+    <p>Questions about this privacy policy? Send an email to: <a class="contact-email" href="mailto:support@furrow.app">support@furrow.app</a></p>
+
+    <h2><span class="num">7.</span> Changes</h2>
+    <p>This policy may be updated from time to time. The date at the top indicates the most recent version. We recommend checking this policy occasionally if you have concerns about how your data is handled.</p>
+  </div>
+</body>
+</html>

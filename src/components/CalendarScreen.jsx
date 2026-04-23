@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   startOfMonth,
   endOfMonth,
@@ -28,6 +28,23 @@ import { t, getDateLocale } from "../i18n";
  * @param {string|null} props.error
  * @param {string} props.lang - 'en' | 'nl'
  */
+
+function InfoSheet({ title, body, onClose }) {
+  return (
+    <div className="best-overlay" onClick={onClose}>
+      <div className="best-cat-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="best-cat-sheet-header">
+          <span className="best-cat-sheet-title">{title}</span>
+          <button type="button" className="pruning-sheet-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="info-sheet-body">
+          <p>{body}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CalendarScreen({
   advice,
   dailyForecastNext5,
@@ -41,6 +58,7 @@ export function CalendarScreen({
   onRetry,
   lang = "en",
 }) {
+  const [showInfo, setShowInfo] = useState(false);
   const dateLocale = getDateLocale(lang);
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -87,13 +105,15 @@ export function CalendarScreen({
     return map;
   }, [dailyForecastNext5]);
 
-  const getWeatherEmoji = (main) => {
+  const getWeatherEmoji = (item) => {
+    const main = item?.main;
     if (!main) return null;
+    const rainMm = Number(item?.rainMm ?? 0);
     switch (main) {
       case "Clear": return "☀️";
       case "Clouds": return "⛅";
       case "Drizzle":
-      case "Rain": return "🌧️";
+      case "Rain": return rainMm >= 1 ? "🌧️" : "🌦️";
       case "Thunderstorm": return "⛈️";
       case "Snow": return "❄️";
       default: return "🌦️";
@@ -104,7 +124,7 @@ export function CalendarScreen({
   const getHistoricalEmoji = (hist) => {
     if (!hist) return null;
     const rainMm = Number(hist.rainMm ?? 0);
-    if (rainMm > 0) return "🌧️";
+    if (rainMm >= 1) return "🌧️";
     const cloud = hist.cloudCoverMean;
     if (typeof cloud === "number") return cloud >= CLOUDY_THRESHOLD ? "☁️" : "☀️";
     return "☀️";
@@ -130,7 +150,7 @@ export function CalendarScreen({
     if (canGoNext) onMonthChange(addMonths(currentMonth, 1));
   };
 
-  const monthLabel = format(currentMonth, "MMMM yyyy", { locale: dateLocale });
+  const badgeMonth = format(currentMonth, "MMMM", { locale: dateLocale });
   const weekdays = t(lang, "calWeekdays");
 
   return (
@@ -138,35 +158,50 @@ export function CalendarScreen({
 
       {/* ── HEADER ── */}
       <div className="cal-header">
-        <div className="cal-header-app-title">🌿 Garden Watering</div>
-        <div className="cal-header-title">
-          {t(lang, "calTitle").split("\n").map((line, i) => (
-            <React.Fragment key={i}>{line}{i === 0 && <br />}</React.Fragment>
-          ))}
+        {/* Top row: info button — same position as pruning */}
+        <div className="cal-header-top-row">
+          <button
+            type="button"
+            className="pruning-info-btn"
+            onClick={() => setShowInfo(true)}
+            aria-label="More info"
+          >
+            ⓘ
+          </button>
         </div>
-        <div className="cal-header-subtitle">{monthLabel}</div>
 
-        <div className="cal-month-nav">
-          <div className="cal-month-name">{monthLabel}</div>
-          <div className="cal-nav-buttons">
-            <button
-              type="button"
-              onClick={handlePrevMonth}
-              disabled={!canGoPrev}
-              className="cal-nav-btn"
-              aria-label={t(lang, "calPrevMonth")}
-            >
-              ‹
-            </button>
-            <button
-              type="button"
-              onClick={handleNextMonth}
-              disabled={!canGoNext}
-              className="cal-nav-btn"
-              aria-label={t(lang, "calNextMonth")}
-            >
-              ›
-            </button>
+        {/* Title + month badge + nav arrows */}
+        <div className="cal-header-title-row">
+          <h1 className="cal-header-title">
+            {t(lang, "calTitle").split("\n").map((line, i) => (
+              <React.Fragment key={i}>{line}{i === 0 && <br />}</React.Fragment>
+            ))}
+          </h1>
+          <div className="cal-header-right">
+            <div className="cal-header-month-badge">
+              <span className="cal-header-badge-icon">💧</span>
+              <span className="cal-header-badge-month">{badgeMonth}</span>
+            </div>
+            <div className="cal-nav-arrows">
+              <button
+                type="button"
+                onClick={handlePrevMonth}
+                disabled={!canGoPrev}
+                className="cal-nav-btn"
+                aria-label={t(lang, "calPrevMonth")}
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                onClick={handleNextMonth}
+                disabled={!canGoNext}
+                className="cal-nav-btn"
+                aria-label={t(lang, "calNextMonth")}
+              >
+                ›
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -208,7 +243,7 @@ export function CalendarScreen({
 
             const emoji = isPastDay
               ? getHistoricalEmoji(historicalByDate[iso])
-              : getWeatherEmoji(weatherByDate[iso]?.main);
+              : getWeatherEmoji(weatherByDate[iso]);
 
             // Cell class priority: watered > today > best > no-data > other-month > normal
             const cellClass = [
@@ -254,6 +289,14 @@ export function CalendarScreen({
           </div>
         </div>
       </div>
+
+      {showInfo && (
+        <InfoSheet
+          title={t(lang, "calInfoTitle")}
+          body={t(lang, "calInfoBody")}
+          onClose={() => setShowInfo(false)}
+        />
+      )}
     </div>
   );
 }

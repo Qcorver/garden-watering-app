@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacybeleid – Groene vingers</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #2c2c2c;
+      background: #f7f9f4;
+      line-height: 1.7;
+      font-size: 16px;
+    }
+    .container { max-width: 680px; margin: 0 auto; padding: 3rem 1.5rem 4rem; }
+    .header {
+      margin-bottom: 2.5rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 2px solid #3a7d44;
+    }
+    .header h1 { font-size: 1.75rem; font-weight: 700; color: #3a7d44; margin-bottom: 0.25rem; }
+    .header .app-name { font-size: 1rem; color: #6b7b6e; font-weight: 500; }
+    .header .updated { font-size: 0.85rem; color: #9aa89c; margin-top: 0.5rem; }
+    .intro { margin-bottom: 2rem; color: #4a5a4c; }
+    h2 { font-size: 1.15rem; font-weight: 700; color: #2c3e2e; margin-top: 2rem; margin-bottom: 0.75rem; }
+    h2 .num { color: #3a7d44; margin-right: 0.25rem; }
+    p { margin-bottom: 1rem; color: #3d4a3e; }
+    ul { list-style: none; padding: 0; margin-bottom: 1rem; }
+    ul li {
+      position: relative;
+      padding-left: 1.25rem;
+      margin-bottom: 0.75rem;
+      color: #3d4a3e;
+    }
+    ul li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0.65rem;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #3a7d44;
+    }
+    strong { font-weight: 600; color: #2c3e2e; }
+    a { color: #3a7d44; text-decoration: underline; text-underline-offset: 2px; }
+    a:hover { color: #2a5d32; }
+    .contact-email {
+      display: inline-block;
+      background: #e8f0e4;
+      padding: 0.25rem 0.75rem;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+    @media (max-width: 600px) {
+      .container { padding: 2rem 1.25rem 3rem; }
+      .header h1 { font-size: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Privacybeleid</h1>
+      <div class="app-name">Groene vingers</div>
+      <div class="updated">Laatste update: april 2026</div>
+    </div>
+
+    <p class="intro">Groene vingers ("de app") is een sproeiapp voor tuinen die weergegevens en verdampingswetenschap gebruikt voor persoonlijk sproei- en snoeiadvies. Dit privacybeleid legt uit welke gegevens wij verzamelen, waarom, en hoe wij deze gebruiken.</p>
+
+    <h2><span class="num">1.</span> Gegevens die wij verzamelen</h2>
+    <ul>
+      <li><strong>Locatiegegevens</strong> — De plaatsnaam of coördinaten die je opgeeft (of deelt via GPS), uitsluitend gebruikt om weergegevens voor jouw gebied op te halen. Je locatie wordt opgeslagen in onze database zodat dagelijkse pushmeldingen op de juiste locatie zijn gebaseerd. Je kunt je locatie op elk moment aanpassen of wissen via het tabblad Instellingen.</li>
+      <li><strong>Anonieme gebruikers-ID</strong> — Bij het eerste gebruik wordt automatisch een anonieme sessie aangemaakt via Supabase. Er is geen account, naam, e-mailadres of wachtwoord vereist.</li>
+      <li><strong>FCM-pushtoken</strong> — Als je pushmeldingen inschakelt, slaan wij een apparaattoken op (Google Firebase Cloud Messaging) om je dagelijkse sproei- en snoeiherinneringen te sturen. Dit token is gekoppeld aan jouw anonieme gebruikers-ID. Je kunt meldingen op elk moment uitschakelen.</li>
+      <li><strong>Sproeigeschiedenis</strong> — De dagen waarop je aangeeft te hebben gesproeid worden zowel op je apparaat (lokale opslag) als in onze database opgeslagen, gekoppeld aan jouw anonieme gebruikers-ID. Dit zorgt ervoor dat het advies in pushmeldingen consistent blijft met het advies in de app, ook na herinstallatie.</li>
+      <li><strong>Tuinplantengegevens</strong> — Als je planten toevoegt aan je persoonlijke plantenbibliotheek, slaan wij de soortnaam, gewone naam, snoeimaanden, watercategorie, standplaats (pot of grond), lichtvoorkeur en thumbnail-afbeeldings-URL op in onze database, gekoppeld aan jouw anonieme gebruikers-ID. Deze gegevens worden gebruikt voor persoonlijk sproeiadvies per plantcategorie en voor het verzenden van snoeiherinneringen.</li>
+      <li><strong>Camera &amp; plantherkenning</strong> — Als je de camerafunctie gebruikt om een plant te identificeren, wordt de foto verzonden naar een plantherkenningsdienst voor verwerking. Wij slaan de foto zelf niet op; de foto wordt uitsluitend gebruikt om een soortidentificatie terug te sturen en wordt daarna onmiddellijk verwijderd.</li>
+    </ul>
+
+    <h2><span class="num">2.</span> Hoe wij je gegevens gebruiken</h2>
+    <ul>
+      <li>Ophalen van weergegevens (Open-Meteo, OpenWeather) voor sproeiadvies afgestemd op jouw locatie.</li>
+      <li>Verzenden van dagelijkse pushmeldingen met sproeiadvies op basis van de weersvoorspelling en je recente sproeigeschiedenis.</li>
+      <li>Verzenden van maandelijkse snoeiherinneringen voor de planten in jouw plantenbibliotheek.</li>
+      <li>Weergeven van sproeiadvies per plantcategorie binnen de app.</li>
+      <li>Het functioneel houden van de app. Jouw gegevens worden nooit verkocht of gedeeld met derden voor marketingdoeleinden.</li>
+    </ul>
+
+    <h2><span class="num">3.</span> Derden</h2>
+    <ul>
+      <li><strong>Supabase</strong> — Databasehosting (EU-regio, Ierland) voor anonieme gebruikers-ID's, locatie, pushtokens, sproeigeschiedenis en tuinplantengegevens.</li>
+      <li><strong>Open-Meteo</strong> — Gratis weerdienst voor historische neerslag- en temperatuurgegevens; er wordt geen API-sleutel of persoonsgegeven verstuurd.</li>
+      <li><strong>OpenWeather</strong> — Weersvoorspelling via een server-side proxy; alleen jouw plaatsnaam wordt verstuurd, geen verdere persoonsgegevens.</li>
+      <li><strong>Google Firebase (FCM)</strong> — Pushmeldingen; jouw apparaattoken wordt verwerkt door Google overeenkomstig <a href="https://policies.google.com/privacy">het privacybeleid van Google</a>.</li>
+      <li><strong>Plantherkenningsdienst</strong> — Bij gebruik van de camerafunctie wordt de foto verzonden naar een plantherkennings-API, uitsluitend voor identificatie. De foto wordt niet bewaard na afhandeling van het verzoek.</li>
+    </ul>
+
+    <h2><span class="num">4.</span> Gegevensopslag en bewaartermijn</h2>
+    <p>Locatie, pushtoken, sproeigeschiedenis en tuinplantengegevens worden bewaard zolang je de app gebruikt. Je kunt pushmeldingen op elk moment uitschakelen via de app, waardoor jouw pushtoken uit onze database wordt verwijderd. Je kunt afzonderlijke planten verwijderen uit je plantenbibliotheek binnen de app.</p>
+    <p>Er is geen traditionele verwijderprocedure voor accounts, omdat er geen persoonsgebonden account bestaat — de anonieme sessie bevat geen informatie die herleidbaar is naar jou als individu. Als je de app verwijdert, blijven de anonieme sessiegegevens opgeslagen maar zijn ze niet langer gekoppeld aan een actief apparaat.</p>
+
+    <h2><span class="num">5.</span> Jouw rechten (AVG)</h2>
+    <p>Omdat wij uitsluitend anonieme gegevens verwerken die niet kunnen worden gekoppeld aan een geïdentificeerde persoon, zijn de meeste AVG-rechten (inzage, correctie, verwijdering) in de traditionele zin niet van toepassing. Zonder jouw anonieme gebruikers-ID kunnen wij niet opzoeken welke gegevens van jou zijn. Bij vragen of verzoeken kun je contact met ons opnemen via het onderstaande e-mailadres.</p>
+
+    <h2><span class="num">6.</span> Contact</h2>
+    <p>Vragen over dit privacybeleid? Stuur een e-mail naar: <a class="contact-email" href="mailto:support@furrow.app">support@furrow.app</a></p>
+
+    <h2><span class="num">7.</span> Wijzigingen</h2>
+    <p>Dit beleid kan van tijd tot tijd worden bijgewerkt. De datum bovenaan geeft de meest recente versie aan. Wij raden aan dit beleid af en toe te raadplegen als je vragen hebt over hoe jouw gegevens worden verwerkt.</p>
+  </div>
+</body>
+</html>

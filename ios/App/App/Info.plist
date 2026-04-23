@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>WhenToWater</string>
+	<string>Groene Vingers</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -53,5 +53,7 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>WhenToWater uses your location to fetch local weather data and give accurate watering advice.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>WhenToWater uses the camera to identify plants.</string>
 </dict>
 </plist>

@@ -44,8 +44,8 @@ export function PlantIllustration({ weather = "sunny", soilWet = true }) {
         </g>
       )}
 
-      {/* ── Raindrops (rain only, and only when soil is wet / plant is healthy) ── */}
-      {isRain && soilWet && (
+      {/* ── Raindrops (rain only) ── */}
+      {isRain && (
         <g className="raindrops">
           <line className="raindrop" x1="58"  y1="60" x2="55"  y2="72" stroke="#5b9bd5" strokeWidth="2.2" strokeLinecap="round"/>
           <line className="raindrop" x1="72"  y1="64" x2="69"  y2="78" stroke="#5b9bd5" strokeWidth="2.2" strokeLinecap="round"/>

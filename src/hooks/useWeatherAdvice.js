@@ -7,8 +7,9 @@ import {
 } from "../api/openWeatherClient";
 import { fetchRainHistory, fetchDailyRainHistory } from "../api/openMeteoClient";
 
-export function useWeatherAdvice(locationName, lastWateredDate) {
+export function useWeatherAdvice(locationName, lastWateredDate, { soilMultiplier = 1.0, sensitivityFactor = 1.0 } = {}) {
   const [advice, setAdvice] = useState(null);
+  const [weatherInputs, setWeatherInputs] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -30,6 +31,11 @@ export function useWeatherAdvice(locationName, lastWateredDate) {
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
+
+    if (!locationName) {
+      setIsLoading(false);
+      return () => { controller.abort(); };
+    }
 
     async function load() {
       try {
@@ -65,8 +71,9 @@ export function useWeatherAdvice(locationName, lastWateredDate) {
           latitude: lat,
         };
         weatherInputsRef.current = inputs;
+        setWeatherInputs(inputs);
 
-        setAdvice(calculateWateringAdvice({ ...inputs, lastWateredDate: lastWateredDateRef.current }));
+        setAdvice(calculateWateringAdvice({ ...inputs, lastWateredDate: lastWateredDateRef.current, soilMultiplier, sensitivityFactor }));
       } catch (err) {
         if (err.name === "AbortError") return;
         console.error(err);
@@ -83,11 +90,11 @@ export function useWeatherAdvice(locationName, lastWateredDate) {
     return () => { controller.abort(); };
   }, [locationName, retryCount]);
 
-  // Recalculate advice without re-fetching when lastWateredDate changes.
+  // Recalculate advice without re-fetching when lastWateredDate, soil, or sensitivity changes.
   useEffect(() => {
     if (!weatherInputsRef.current) return;
-    setAdvice(calculateWateringAdvice({ ...weatherInputsRef.current, lastWateredDate }));
-  }, [lastWateredDate]);
+    setAdvice(calculateWateringAdvice({ ...weatherInputsRef.current, lastWateredDate, soilMultiplier, sensitivityFactor }));
+  }, [lastWateredDate, soilMultiplier, sensitivityFactor]);
 
-  return { advice, isLoading, error, retry, dailyForecastNext5, historicalDailyRain };
+  return { advice, weatherInputs, isLoading, error, retry, dailyForecastNext5, historicalDailyRain };
 }

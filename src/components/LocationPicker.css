@@ -132,5 +132,7 @@
 }
 
 .loc-current {
-  display: none; /* shown as location card in BestDayToWaterScreen */
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: #555;
 }

@@ -125,6 +125,10 @@ export default function LocationPicker({ locationName, onLocationChange, lang = 
     <footer className="loc-footer">
       <div className="loc-title">{t(lang, "locTitle")}</div>
 
+      <p className="loc-current">
+        {t(lang, "locUsing").split("{name}")[0]}<strong>{locationName}</strong>
+      </p>
+
       {/* Current location button */}
       <button
         type="button"
@@ -182,9 +186,6 @@ export default function LocationPicker({ locationName, onLocationChange, lang = 
         </button>
       </form>
 
-      <p className="loc-current">
-        {t(lang, "locUsing").split("{name}")[0]}<strong>{locationName}</strong>
-      </p>
     </footer>
   );
 }

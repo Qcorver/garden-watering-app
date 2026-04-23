@@ -1,14 +1,54 @@
-import React from "react";
-import { format, isToday, isTomorrow } from "date-fns";
+import React, { useMemo, useState } from "react";
+import { format, isToday, isTomorrow, subDays } from "date-fns";
 import "./BestDayToWaterScreen.css";
 import { PlantIllustration } from "./PlantIllustration";
-import LocationPicker from "./LocationPicker";
 import { t, getDateLocale } from "../i18n";
+import { CATEGORIES, calculateWateringAdvice } from "@shared/wateringLogic";
+import { detectWaterCategory, PlantThumbnail, PlantDetailPopup } from "./PruningScreen";
 
-/** Map OpenWeather `main` condition to illustration weather type. */
-function getWeatherType(main) {
+const CATEGORY_ORDER = ["vegetable", "border", "drought", "trees", "pots"];
+const CATEGORY_ICON = { vegetable: "🥕", border: "🌸", drought: "🌵", trees: "🌳", pots: "🪴" };
+const CATEGORY_LABEL_KEY = {
+  vegetable: "catVegetable", border: "catBorder", drought: "catDrought",
+  trees: "catTrees", pots: "catPots",
+};
+
+function InfoIcon({ onClick, dark = false }) {
+  return (
+    <button
+      type="button"
+      className={`info-icon${dark ? " info-icon--dark" : ""}`}
+      onClick={onClick}
+      aria-label="More info"
+    >
+      ⓘ
+    </button>
+  );
+}
+
+function InfoSheet({ title, body, onClose }) {
+  return (
+    <div className="best-overlay" onClick={onClose}>
+      <div className="best-cat-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="best-cat-sheet-header">
+          <span className="best-cat-sheet-title">{title}</span>
+          <button type="button" className="pruning-sheet-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="info-sheet-body">
+          {body.split("\n\n").map((para, i) => <p key={i}>{para}</p>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Map OpenWeather `main` condition + daily rain total to illustration weather type.
+ *  Drizzle always → cloudy (no raindrops for light mist).
+ *  Rain/Thunderstorm/Snow → rain only if ≥ 1 mm fell today; otherwise cloudy. */
+function getWeatherType(main, rainMm = 0) {
   if (!main) return "sunny";
-  if (["Rain", "Drizzle", "Thunderstorm", "Snow"].includes(main)) return "rain";
+  if (main === "Drizzle") return "cloudy";
+  if (["Rain", "Thunderstorm", "Snow"].includes(main)) return rainMm >= 1 ? "rain" : "cloudy";
   if (main === "Clouds" || main === "Atmosphere") return "cloudy";
   return "sunny";
 }
@@ -34,34 +74,32 @@ function getAdviceMessage(lang, advice) {
 
 /**
  * @param {Object} props
- * @param {Object} props.location - { name: string, type: 'current' | 'saved' }
- * @param {string} props.locationName
- * @param {function} props.onLocationChange
  * @param {Object} props.advice   - result of calculateWateringAdvice
  * @param {Array}  props.dailyForecastNext5 - [{date, rainMm, main}, …] from OpenWeather
  * @param {boolean} props.isLoading
  * @param {string|null} props.error
  * @param {() => void} props.onRetry
- * @param {boolean} props.pushEnabled
- * @param {boolean} props.pushIsLoading
- * @param {(nextEnabled: boolean) => void} props.onTogglePush
+ * @param {number} props.soilMultiplier - from Settings soil type selection
+ * @param {number} props.sensitivityFactor - from Settings sensitivity slider
  * @param {string} props.lang - 'en' | 'nl'
  * @param {(lang: string) => void} props.onSetLang
  */
 export function BestDayToWaterScreen({
-  location,
-  locationName,
-  onLocationChange,
   advice,
+  weatherInputs = null,
+  gardenPlants = [],
+  lastWateredDate = null,
+  wateringHistory = {},
+  onToggleWateredDay,
   dailyForecastNext5 = [],
   isLoading,
   error,
   onRetry,
-  pushEnabled,
-  pushIsLoading,
-  onTogglePush,
+  soilMultiplier = 1.0,
+  sensitivityFactor = 1.0,
   lang = "en",
   onSetLang,
+  locationName = "",
 }) {
   const {
     shouldWater,
@@ -71,6 +109,40 @@ export function BestDayToWaterScreen({
     rainLast7,
     rainNext3,
   } = advice || {};
+
+  // Derive active categories from the user's plant lists (pruning + herbs tabs).
+  const activeCategoryKeys = useMemo(() => {
+    const keys = new Set();
+    gardenPlants.forEach((p) => {
+      const cat = p.waterCategory ?? detectWaterCategory(p);
+      if (cat in CATEGORIES) keys.add(cat);
+    });
+    return CATEGORY_ORDER.filter((k) => keys.has(k));
+  }, [gardenPlants]);
+
+  const hasPlants = activeCategoryKeys.length > 0;
+
+  // Compute per-category advice from shared weather inputs.
+  const categoryAdvice = useMemo(() => {
+    if (!weatherInputs || !hasPlants) return {};
+    return Object.fromEntries(
+      activeCategoryKeys.map((key) => {
+        const { multiplier, rainEfficiency } = CATEGORIES[key];
+        return [key, calculateWateringAdvice({
+          ...weatherInputs,
+          weeklyTargetMultiplier: multiplier,
+          rainEfficiency,
+          lastWateredDate,
+          soilMultiplier,
+          sensitivityFactor,
+          lang,
+        })];
+      })
+    );
+  }, [weatherInputs, activeCategoryKeys, hasPlants, lastWateredDate, soilMultiplier, sensitivityFactor, lang]);
+
+  const [categoryPopupKey, setCategoryPopupKey] = useState(null);
+  const [infoSheet, setInfoSheet] = useState(null); // "rainfall" | "rec" | null
 
   const dateLocale = getDateLocale(lang);
 
@@ -85,17 +157,37 @@ export function BestDayToWaterScreen({
   const heroMonth = format(heroDateRaw, "MMMM", { locale: dateLocale });
   const heroWeekday = format(heroDateRaw, "EEEE", { locale: dateLocale });
 
+  // Today's / yesterday's watered state (for interactive badge)
+  const todayKey = format(new Date(), "yyyy-MM-dd");
+  const yesterdayKey = format(subDays(new Date(), 1), "yyyy-MM-dd");
+  const todayWatered = !!wateringHistory[todayKey];
+  const yesterdayWatered = !!wateringHistory[yesterdayKey];
+
+  // When per-category advice is available, any category needing water should
+  // override the main (generic garden) shouldWater flag for the badge.
+  const effectiveShouldWater = hasPlants && Object.keys(categoryAdvice).length > 0
+    ? Object.values(categoryAdvice).some((ca) => ca?.shouldWater)
+    : shouldWater;
+
   // Badge text + style based on advice state
   let badgeText = t(lang, "badgeLoading");
   let badgePulseColor = "#7ed956";
+  let badgeClickable = false;
   if (!isLoading && error) {
     badgeText = t(lang, "badgeUnableToLoad");
     badgePulseColor = "#f87171";
   } else if (!isLoading && advice) {
-    if (shouldWater) {
-      if (isToday(heroDateRaw))        badgeText = t(lang, "badgeWaterToday");
-      else if (isTomorrow(heroDateRaw)) badgeText = t(lang, "badgeWaterTomorrow");
-      else                              badgeText = t(lang, "badgeWaterOn", { weekday: heroWeekday });
+    if (todayWatered) {
+      badgeText = t(lang, "wateredToday");
+      badgePulseColor = "#34d399";
+      badgeClickable = true;
+    } else if (yesterdayWatered) {
+      badgeText = t(lang, "wateredYesterday");
+      badgePulseColor = effectiveShouldWater ? "#f87171" : "#34d399";
+    } else if (effectiveShouldWater) {
+      badgeClickable = true;
+      badgeText = t(lang, "wateredTodayQuestion");
+      badgePulseColor = "#f87171";
     } else if (noWaterReason === "upcoming_rain") {
       badgeText = t(lang, "badgeRainExpected");
       badgePulseColor = "#60a5fa";
@@ -111,13 +203,7 @@ export function BestDayToWaterScreen({
   const rainNext3Pct = Math.min(100, Math.max(2, ((rainNext3 || 0) / RAIN_MAX) * 100));
 
   // Plant illustration: derive current weather from today's forecast entry
-  const currentWeather = getWeatherType(dailyForecastNext5[0]?.main);
-
-  // Location display: split "Amstelveen,NL" → city + country code
-  const displayName = locationName || location?.name || "";
-  const commaIdx = displayName.indexOf(",");
-  const displayCity = commaIdx >= 0 ? displayName.slice(0, commaIdx) : displayName;
-  const displayCountry = commaIdx >= 0 ? displayName.slice(commaIdx + 1).trim() : "";
+  const currentWeather = getWeatherType(dailyForecastNext5[0]?.main, dailyForecastNext5[0]?.rainMm);
 
   return (
     <div className="best-screen">
@@ -125,7 +211,6 @@ export function BestDayToWaterScreen({
       {/* ── HERO HEADER ── */}
       <div className="best-hero">
         <div className="best-hero-top-row">
-          <div className="best-app-title">🌿 Garden Watering</div>
           {/* Language toggle */}
           <div className="best-lang-toggle">
             <button
@@ -148,12 +233,28 @@ export function BestDayToWaterScreen({
             <div className="best-date-dot" />
             <span>{heroWeekday}</span>
           </div>
+          {locationName && (
+            <div className="best-date-meta best-date-location">
+              <span>{locationName}</span>
+            </div>
+          )}
         </div>
 
-        <div className="best-badge">
-          <div className="best-badge-pulse" style={{ background: badgePulseColor }} />
-          <span>{badgeText}</span>
-        </div>
+        {badgeClickable ? (
+          <button
+            type="button"
+            className="best-badge best-badge--btn"
+            onClick={() => onToggleWateredDay?.(new Date())}
+          >
+            <div className="best-badge-pulse" style={{ background: badgePulseColor }} />
+            <span>{badgeText}</span>
+          </button>
+        ) : (
+          <div className="best-badge">
+            <div className="best-badge-pulse" style={{ background: badgePulseColor }} />
+            <span>{badgeText}</span>
+          </div>
+        )}
 
         {!isLoading && !error && advice && (
           <div className="best-hero-illustration">
@@ -179,7 +280,10 @@ export function BestDayToWaterScreen({
         {!isLoading && !error && advice && (
           <>
             {/* Rain overview */}
-            <div className="best-section-label">{t(lang, "rainfallOverview")}</div>
+            <div className="best-section-label-row">
+              <div className="best-section-label">{t(lang, "rainfallOverview")}</div>
+              <InfoIcon onClick={() => setInfoSheet("rainfall")} />
+            </div>
             <div className="best-rain-card">
               <div className="best-rain-divider" />
               <div className="best-rain-stat">
@@ -204,72 +308,152 @@ export function BestDayToWaterScreen({
               </div>
             </div>
 
-            {/* Recommendation */}
-            <div className="best-rec-card">
-              <div className="best-rec-label">{t(lang, "recommendation")}</div>
-              {shouldWater ? (
-                <>
-                  <div className="best-rec-main">
-                    ~{deficitMinutesPerM2} min per m²
+            {/* Recommendation — per-category cards when plants are added, single card otherwise */}
+            {hasPlants ? (
+              <div className="best-cat-list">
+                {activeCategoryKeys.map((key) => {
+                  const ca = categoryAdvice[key];
+                  if (!ca) return null;
+                  const watering = ca.shouldWater;
+                  const dateRaw = watering && ca.bestWateringDate
+                    ? (ca.bestWateringDate instanceof Date ? ca.bestWateringDate : new Date(ca.bestWateringDate))
+                    : null;
+                  const dayLabel = dateRaw
+                    ? isToday(dateRaw) ? t(lang, "badgeWaterToday")
+                      : isTomorrow(dateRaw) ? t(lang, "badgeWaterTomorrow")
+                      : t(lang, "badgeWaterOn", { weekday: format(dateRaw, "EEEE", { locale: dateLocale }) })
+                    : null;
+                  return (
+                    <div
+                      key={key}
+                      role="button"
+                      className={`best-cat-card${watering ? " best-cat-card--water" : ""}`}
+                      onClick={() => setCategoryPopupKey(key)}
+                    >
+                      <div className="best-cat-name">
+                        <span>{CATEGORY_ICON[key]}</span>
+                        {t(lang, CATEGORY_LABEL_KEY[key])}
+                      </div>
+                      <div className="best-cat-advice">
+                        {watering ? (
+                          <>
+                            <span className="best-cat-amount">~{ca.deficitMinutesPerM2} min/m²</span>
+                            {dayLabel && <span className="best-cat-day"> · {dayLabel}</span>}
+                          </>
+                        ) : (
+                          t(lang, "noWateringNeeded")
+                        )}
+                      </div>
+                      <div className="best-cat-chevron">›</div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <>
+                <div className="best-rec-card">
+                  <div className="best-rec-label-row">
+                    <div className="best-rec-label">{t(lang, "recommendation")}</div>
+                    <InfoIcon onClick={() => setInfoSheet("rec")} dark />
                   </div>
-                  <div className="best-rec-sub">
-                    {isTomorrow(heroDateRaw)
-                      ? t(lang, "wateringAdvisedTomorrow")
-                      : isToday(heroDateRaw)
-                        ? t(lang, "wateringAdvised")
-                        : t(lang, "wateringAdvisedOn", { weekday: heroWeekday })}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="best-rec-main">{t(lang, "noWateringNeeded")}</div>
-                  <div className="best-rec-sub">{getAdviceMessage(lang, advice)}</div>
-                </>
-              )}
-            </div>
+                  {shouldWater ? (
+                    <>
+                      <div className="best-rec-main">~{deficitMinutesPerM2} min per m²</div>
+                      <div className="best-rec-sub">
+                        {isTomorrow(heroDateRaw)
+                          ? t(lang, "wateringAdvisedTomorrow")
+                          : isToday(heroDateRaw)
+                            ? t(lang, "wateringAdvised")
+                            : t(lang, "wateringAdvisedOn", { weekday: heroWeekday })}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="best-rec-main">{t(lang, "noWateringNeeded")}</div>
+                      <div className="best-rec-sub">{getAdviceMessage(lang, advice)}</div>
+                    </>
+                  )}
+                </div>
+                <div className="best-add-plants-prompt">
+                  <p className="best-add-plants-text">{t(lang, "catAddPlantsPrompt")}</p>
+                </div>
+              </>
+            )}
           </>
         )}
 
-        {/* Push notifications */}
-        <div className="best-section-label">{t(lang, "reminders")}</div>
-        <div
-          role="button"
-          aria-pressed={!!pushEnabled}
-          onClick={() => {
-            if (pushIsLoading) return;
-            onTogglePush?.(!pushEnabled);
-          }}
-          className={`best-notif-card${pushIsLoading ? " best-notif-card--loading" : ""}`}
-        >
-          <div className="best-notif-info">
-            <div className="best-notif-title">{t(lang, "pushNotifications")}</div>
-            <div className="best-notif-sub">{t(lang, "pushNotificationsSub")}</div>
-          </div>
-          <div className={`best-toggle${pushEnabled ? " best-toggle--on" : ""}`} />
-        </div>
-        <div aria-live="polite" className="best-push-status">
-          {pushIsLoading ? t(lang, "saving") : ""}
-        </div>
+      </div>
 
-        {/* Location */}
-        <div className="best-section-label">{t(lang, "yourLocation")}</div>
-        <div className="best-location-card">
-          <div className="best-location-icon">📍</div>
-          <div className="best-location-text">
-            <div className="best-location-city">{displayCity || displayName}</div>
-            {displayCountry && (
-              <div className="best-location-country">{displayCountry}</div>
-            )}
-          </div>
-        </div>
+      {infoSheet && (
+        <InfoSheet
+          title={t(lang, infoSheet === "rainfall" ? "infoRainfallTitle" : "infoRecTitle")}
+          body={t(lang, infoSheet === "rainfall" ? "infoRainfallBody" : "infoRecBody")}
+          onClose={() => setInfoSheet(null)}
+        />
+      )}
 
-        <LocationPicker
-          locationName={locationName || location?.name || ""}
-          onLocationChange={onLocationChange}
+      {categoryPopupKey && (
+        <CategoryPlantsPopup
+          categoryKey={categoryPopupKey}
+          gardenPlants={gardenPlants}
+          onClose={() => setCategoryPopupKey(null)}
           lang={lang}
         />
-
-      </div>
+      )}
     </div>
+  );
+}
+
+function CategoryPlantsPopup({ categoryKey, gardenPlants, onClose, lang }) {
+  const [detailPlant, setDetailPlant] = useState(null);
+
+  const plants = useMemo(() => {
+    return gardenPlants.filter((p) => {
+      const cat = p.waterCategory ?? detectWaterCategory(p);
+      return cat === categoryKey;
+    });
+  }, [categoryKey, gardenPlants]);
+
+  return (
+    <>
+      <div className="best-overlay" onClick={onClose}>
+        <div className="best-cat-sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="best-cat-sheet-header">
+            <span className="best-cat-sheet-title">
+              {CATEGORY_ICON[categoryKey]} {t(lang, CATEGORY_LABEL_KEY[categoryKey])}
+            </span>
+            <button type="button" className="pruning-sheet-close" onClick={onClose}>✕</button>
+          </div>
+          {plants.length === 0 ? (
+            <p className="best-cat-sheet-empty">{t(lang, "catNoPlants")}</p>
+          ) : (
+            <div className="best-cat-sheet-list">
+              {plants.map((plant) => (
+                <button
+                  key={plant.id}
+                  type="button"
+                  className="best-cat-sheet-row"
+                  onClick={() => setDetailPlant(plant)}
+                >
+                  <PlantThumbnail imageUrl={plant.imageUrl} commonName={plant.commonName} />
+                  <div className="best-cat-sheet-row-info">
+                    <span className="best-cat-sheet-row-name">{plant.commonName}</span>
+                    <span className="best-cat-sheet-row-sci">{plant.scientificName}</span>
+                  </div>
+                  <span className="best-cat-sheet-row-arrow">›</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      {detailPlant && (
+        <PlantDetailPopup
+          plant={detailPlant}
+          onClose={() => setDetailPlant(null)}
+          lang={lang}
+        />
+      )}
+    </>
   );
 }

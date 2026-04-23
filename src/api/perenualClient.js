@@ -37,3 +37,24 @@ export async function getPlantDetails(id, signal, lang = "en") {
 
   return res.json();
 }
+
+/**
+ * Enrich an unknown plant: insert it into plant_species (Wikidata + Claude Haiku),
+ * then return its new internal id.
+ * @param {string} scientificName
+ * @param {string|null} commonName - common name hint from PlantNet recognition
+ * @param {AbortSignal} signal
+ */
+export async function enrichPlant(scientificName, commonName, signal) {
+  const url = `${SUPABASE_URL}/functions/v1/plant-enrich`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: HEADERS,
+    signal,
+    body: JSON.stringify({ scientificName, commonName }),
+  });
+  if (!res.ok) throw new Error(`Plant enrichment failed: ${res.status}`);
+  const data = await res.json();
+  if (!data.id) throw new Error("Enrichment returned no id");
+  return data.id;
+}

@@ -49,6 +49,18 @@ export const BIG_RAIN_DAY_MM = 10; // mm in a single day
 // Optional: if the user marked watering recently, avoid recommending watering again too soon.
 export const MIN_DAYS_BETWEEN_WATERING = 2; // days
 
+// ---------- Plant watering categories ----------
+
+export const CATEGORIES = {
+  vegetable: { multiplier: 1.75, rainEfficiency: 1.0 },
+  border:    { multiplier: 1.0,  rainEfficiency: 1.0 },
+  drought:   { multiplier: 0.35, rainEfficiency: 1.0 },
+  trees:     { multiplier: 0.1,  rainEfficiency: 1.0 },
+  pots:      { multiplier: 1.5,  rainEfficiency: 0.4 },
+} as const;
+
+export type CategoryKey = keyof typeof CATEGORIES;
+
 // Seasonality fallback (used when no temperature data available).
 export function getSeasonFactor(date = new Date()): number {
   const m = date.getMonth(); // 0=Jan ... 11=Dec
@@ -154,6 +166,10 @@ export function calculateWateringAdvice({
   tempLast7 = [],
   latitude = null,
   lang = "en",
+  weeklyTargetMultiplier = 1.0,
+  rainEfficiency = 1.0,
+  soilMultiplier = 1.0,
+  sensitivityFactor = 1.0,
 }: {
   rainLast7: number;
   rainLast2Days?: number;
@@ -166,23 +182,29 @@ export function calculateWateringAdvice({
   tempLast7?: Array<{ date: Date; tmax: number; tmin: number }>;
   latitude?: number | null;
   lang?: Lang;
+  weeklyTargetMultiplier?: number;
+  rainEfficiency?: number;
+  soilMultiplier?: number;
+  sensitivityFactor?: number;
 }) {
-  const _rainLast7 = safeNum(rainLast7);
-  const _rainLast2 = safeNum(rainLast2Days);
-  const _rainLast3 = safeNum(rainLast3Days);
-  const _rainLast5 = safeNum(rainLast5Days);
-  const _maxDailyRain = safeNum(maxDailyRainLast7);
-  const _rainNext3 = safeNum(rainNext3);
+  const _rainLast7 = safeNum(rainLast7) * rainEfficiency;
+  const _rainLast2 = safeNum(rainLast2Days) * rainEfficiency;
+  const _rainLast3 = safeNum(rainLast3Days) * rainEfficiency;
+  const _rainLast5 = safeNum(rainLast5Days) * rainEfficiency;
+  const _maxDailyRain = safeNum(maxDailyRainLast7) * rainEfficiency;
+  const _rainNext3 = safeNum(rainNext3) * rainEfficiency;
 
   const forecast = Array.isArray(dailyForecastNext5) ? dailyForecastNext5 : [];
   const msg = MESSAGES[lang] ?? MESSAGES.en;
 
   const seasonFactor = getSeasonFactor();
   // Use ET₀-based target when temperature + latitude are available; fall back to season factor.
-  const weeklyTarget =
+  // Apply category multiplier on top of the base target.
+  const baseWeeklyTarget =
     tempLast7 && tempLast7.length > 0 && latitude !== null
       ? computeWeeklyTarget(tempLast7, latitude)
       : WEEKLY_TARGET * seasonFactor;
+  const weeklyTarget = baseWeeklyTarget * weeklyTargetMultiplier * soilMultiplier * sensitivityFactor;
 
   // Derive effective season factor from the actual weekly target so wet-soil gates work
   // correctly in both hemispheres and for any climate (not just Northern Hemisphere months).

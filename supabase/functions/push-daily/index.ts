@@ -280,6 +280,24 @@ function getMonthNameInTimezone(date: Date, timeZone: string): string {
   }
 }
 
+const MONTH_NAMES_EN = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/**
+ * Perenual pruning data is NH-centric. For SH users (lat < 0) we need to
+ * compare against the NH-equivalent month (current month + 6) so that, e.g.,
+ * a plant stored as "prune in March" fires a notification in September for AU.
+ */
+function getNHEquivalentMonthName(date: Date, timeZone: string, lat: number): string {
+  const calendarMonth = getMonthNameInTimezone(date, timeZone);
+  if (lat >= 0) return calendarMonth;
+  const idx = MONTH_NAMES_EN.indexOf(calendarMonth);
+  if (idx === -1) return calendarMonth;
+  return MONTH_NAMES_EN[(idx + 6) % 12];
+}
+
 // ---------- handler ----------
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
@@ -425,6 +443,34 @@ Deno.serve(async (req) => {
 
     const errors: Array<{ token: string; status: number; json: any }> = [];
 
+    // Pre-fetch weather for all unique locations sequentially to avoid
+    // hammering Open-Meteo with concurrent requests (it rate-limits hard).
+    // Locations are rounded to ~1km grid so nearby users share one fetch.
+    const weatherCache = new Map<string, Awaited<ReturnType<typeof fetchRainData>>>();
+    const uniqueLocKeys = new Set<string>();
+    for (const row of rows ?? []) {
+      const loc = locByUser.get(row.user_id);
+      if (!loc) continue;
+      const lat = Number(loc.lat);
+      const lon = Number(loc.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      uniqueLocKeys.add(`${lat.toFixed(2)},${lon.toFixed(2)}|${lat}|${lon}`);
+    }
+    for (const entry of uniqueLocKeys) {
+      const [key, latStr, lonStr] = entry.split("|");
+      if (weatherCache.has(key)) continue;
+      try {
+        const data = await fetchRainData(Number(latStr), Number(lonStr));
+        weatherCache.set(key, data);
+      } catch (e) {
+        console.warn(`[push-daily] weather fetch failed for ${key}: ${e}`);
+      }
+    }
+
+    function getCachedWeather(lat: number, lon: number) {
+      return weatherCache.get(`${lat.toFixed(2)},${lon.toFixed(2)}`);
+    }
+
     const batches = chunk(rows ?? [], 10);
 
     for (const batch of batches) {
@@ -455,7 +501,8 @@ Deno.serve(async (req) => {
             return { kind: "skip", reason: "bad_location" };
           }
 
-          const rain = await fetchRainData(lat, lon);
+          const rain = getCachedWeather(lat, lon);
+          if (!rain) return { kind: "skip", reason: "weather_unavailable" };
           const nowLocalMin = minutesSinceMidnightInTimeZone(now, rain.timezone);
 
           if (!withinWindow(nowLocalMin, targetMin, windowMinutes)) {
@@ -484,7 +531,9 @@ Deno.serve(async (req) => {
           if (advice.shouldWater) {
             attempted++;
 
-            const messageBody = advice.message;
+            const messageBody = userLang === "nl"
+              ? "Je tuin heeft vandaag water nodig — open de app om te zien welke planten"
+              : "Your garden needs water today — open the app to see which plants";
             const notifTitle = userLang === "nl" ? "Tuin Bewatering" : title;
             const bestDate = advice.bestWateringDate instanceof Date
               ? advice.bestWateringDate.toISOString().slice(0, 10)
@@ -515,18 +564,20 @@ Deno.serve(async (req) => {
           // ── Pruning notification (1st of the month only) ─────────────
           const dayOfMonth = getDayOfMonthInTimezone(now, rain.timezone);
           if (dayOfMonth === 1) {
-            const monthName = getMonthNameInTimezone(now, rain.timezone);
+            // For SH users we look up the NH-equivalent month, because
+            // pruning_months are stored as NH calendar months from Perenual.
+            const nhMonthName = getNHEquivalentMonthName(now, rain.timezone, lat);
             const userPlants = plantsByUser.get(row.user_id) ?? [];
             const plantsThisMonth = userPlants.filter(
-              (p) => p.pruning_months.includes(monthName),
+              (p) => p.pruning_months.includes(nhMonthName),
             );
 
             if (plantsThisMonth.length > 0) {
               const plantNames = plantsThisMonth.map((p) => p.common_name).join(", ");
-              const pruningTitle = userLang === "nl" ? "✂️ Tijd om te snoeien!" : "✂️ Time to prune!";
+              const pruningTitle = userLang === "nl" ? "Tuin Bewatering" : title;
               const pruningBody = userLang === "nl"
-                ? `Deze maand: ${plantNames}`
-                : `This month: ${plantNames}`;
+                ? "Het is tijd om te snoeien! — open de app om te zien welke planten."
+                : "It's time to prune! — open the app to find out which plants.";
 
               if (!dryRun) {
                 const pr = await sendFcm(
@@ -537,7 +588,7 @@ Deno.serve(async (req) => {
                   {
                     kind: "pruning",
                     sent_at: new Date().toISOString(),
-                    month: monthName,
+                    month: nhMonthName,
                   },
                 );
                 if (pr.ok) pruningSent++;

@@ -5,15 +5,81 @@ import { t } from "./i18n";
 
 import { BestDayToWaterScreen } from "./components/BestDayToWaterScreen";
 import { CalendarScreen } from "./components/CalendarScreen";
-import { PruningScreen } from "./components/PruningScreen";
+import { PruningScreen, detectWaterCategory } from "./components/PruningScreen";
+import { SettingsScreen, getSoilMultiplier } from "./components/SettingsScreen";
+import { OnboardingCarousel } from "./components/OnboardingCarousel";
 
 import { useAuth } from "./hooks/useAuth";
 import { usePushNotifications } from "./hooks/usePushNotifications";
 import { useWeatherAdvice } from "./hooks/useWeatherAdvice";
-import { geocodeCity } from "./api/openWeatherClient";
+import { geocodeCity, reverseGeocode } from "./api/openWeatherClient";
 import { supabase } from "./supabaseClient";
 
 import "./styles/globals.css";
+
+// --- Helpers for garden / herbs plants ---
+function loadGardenPlants() {
+  try { return JSON.parse(localStorage.getItem("gardenPlants") ?? "[]") || []; }
+  catch { return []; }
+}
+function saveGardenPlants(plants) {
+  try { localStorage.setItem("gardenPlants", JSON.stringify(plants)); } catch { /* ignore */ }
+}
+/** One-time migration: assign waterCategory to plants that don't have one yet. */
+function migrateCategories(plants) {
+  let changed = false;
+  const migrated = plants.map((p) => {
+    if (!p.waterCategory) {
+      changed = true;
+      return { ...p, waterCategory: detectWaterCategory(p) };
+    }
+    return p;
+  });
+  if (changed) saveGardenPlants(migrated);
+  return migrated;
+}
+
+/**
+ * Refresh pruning_months (and description) for existing garden plants from the
+ * plant_species table. Runs silently on startup so corrections we make to the
+ * canonical data automatically reach users without them having to re-add plants.
+ * Only updates plants that have a perenual_id and where the data has changed.
+ */
+async function refreshPruningMonthsFromDB(plants, onUpdated) {
+  const ids = plants.map((p) => p.perenualId).filter(Boolean);
+  if (ids.length === 0) return;
+
+  const { data, error } = await supabase
+    .from("plant_species")
+    .select("id, pruning_months, description, image_url")
+    .in("id", ids);
+
+  if (error || !data?.length) return;
+
+  const byId = Object.fromEntries(data.map((r) => [r.id, r]));
+  let changed = false;
+  const updated = plants.map((p) => {
+    const fresh = byId[p.perenualId];
+    if (!fresh) return p;
+    const monthsChanged =
+      JSON.stringify(p.pruningMonths ?? []) !== JSON.stringify(fresh.pruning_months ?? []);
+    const descChanged = fresh.description && fresh.description !== p.description;
+    const imageChanged = fresh.image_url && fresh.image_url !== p.imageUrl;
+    if (!monthsChanged && !descChanged && !imageChanged) return p;
+    changed = true;
+    return {
+      ...p,
+      ...(monthsChanged ? { pruningMonths: fresh.pruning_months } : {}),
+      ...(descChanged   ? { description:   fresh.description }   : {}),
+      ...(imageChanged  ? { imageUrl:      fresh.image_url }     : {}),
+    };
+  });
+
+  if (changed) {
+    saveGardenPlants(updated);
+    onUpdated(updated);
+  }
+}
 
 // --- Helpers for watering history ---
 function loadWateringHistory() {
@@ -66,6 +132,43 @@ async function syncWateringSession(userId, key, active) {
 export default function App() {
   const [activeTab, setActiveTab] = useState("best");
 
+  // --- Onboarding ---
+  const [showOnboarding, setShowOnboarding] = useState(
+    () => !localStorage.getItem("onboardingDone")
+  );
+
+  function handleOnboardingComplete() {
+    localStorage.setItem("onboardingDone", "1");
+    setShowOnboarding(false);
+    if (!localStorage.getItem("selectedLocation")) {
+      setActiveTab("settings");
+    }
+  }
+
+  // --- Soil type (persisted to localStorage) ---
+  const [soilType, setSoilType] = useState(() => {
+    return localStorage.getItem("soilType") || "unknown";
+  });
+
+  function handleSoilTypeChange(newSoilType) {
+    setSoilType(newSoilType);
+    localStorage.setItem("soilType", newSoilType);
+  }
+
+  // --- Sensitivity (persisted to localStorage, integer −50…+50) ---
+  const [sensitivity, setSensitivity] = useState(() => {
+    const stored = localStorage.getItem("wateringSensitivity");
+    return stored !== null ? parseInt(stored, 10) : 0;
+  });
+
+  function handleSensitivityChange(value) {
+    setSensitivity(value);
+    localStorage.setItem("wateringSensitivity", String(value));
+  }
+
+  const soilMultiplier = getSoilMultiplier(soilType);
+  const sensitivityFactor = 1.0 + sensitivity / 100;
+
   // --- Language (persisted to localStorage) ---
   const [lang, setLang] = useState(() => {
     const stored = localStorage.getItem("lang");
@@ -94,16 +197,41 @@ export default function App() {
   const [locationName, setLocationName] = useState(() => {
     return localStorage.getItem("selectedLocation") || "";
   });
-
-  const location = { name: locationName, type: "saved" };
+  const [locationLat, setLocationLat] = useState(() => {
+    const stored = localStorage.getItem("selectedLocationLat");
+    return stored ? parseFloat(stored) : null;
+  });
 
   // --- Calendar month state ---
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
 
+  // --- Garden + herbs plants (for per-category home screen advice) ---
+  const [gardenPlants, setGardenPlants] = useState(() => migrateCategories(loadGardenPlants()));
+
+  // Refresh plant lists when navigating back to the home tab.
+  useEffect(() => {
+    if (activeTab === "best") {
+      setGardenPlants(migrateCategories(loadGardenPlants()));
+    }
+  }, [activeTab]);
+
   // --- Hooks ---
   const { userId, ensureAuthUserId } = useAuth();
   const { pushEnabled, pushLoading, handleTogglePush } = usePushNotifications(userId, ensureAuthUserId);
-  const { advice, isLoading, error, retry, dailyForecastNext5, historicalDailyRain } = useWeatherAdvice(locationName, lastWateredDate);
+  const { advice, weatherInputs, isLoading, error, retry, dailyForecastNext5, historicalDailyRain } = useWeatherAdvice(
+    locationName, lastWateredDate, { soilMultiplier, sensitivityFactor }
+  );
+
+  // Silently refresh pruning months from plant_species once after auth,
+  // so corrections to the canonical data reach users without re-adding plants.
+  useEffect(() => {
+    if (!userId) return;
+    const current = loadGardenPlants();
+    if (current.length === 0) return;
+    refreshPruningMonthsFromDB(current, (updated) => {
+      setGardenPlants(updated);
+    });
+  }, [userId]);
 
   // --- Sync garden plants to Supabase (for pruning push notifications) ---
   const syncPlants = useCallback(
@@ -189,6 +317,9 @@ export default function App() {
         const { lat, lon } = await geocodeCity(locationName);
         if (cancelled) return;
 
+        setLocationLat(lat);
+        localStorage.setItem("selectedLocationLat", String(lat));
+
         const { error: upsertError } = await supabase
           .from("user_location")
           .upsert(
@@ -215,6 +346,21 @@ export default function App() {
     localStorage.setItem("selectedLocation", cleaned);
   }
 
+  function handleRequestLocation() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const name = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+          if (name) handleLocationChange(name);
+        } catch {
+          // silently ignore — user can set location in Settings
+        }
+      },
+      () => {} // denied — user can set location in Settings
+    );
+  }
+
   function handleToggleWateredDay(date) {
     const key = format(date, "yyyy-MM-dd");
     const newValue = !wateringHistory[key];
@@ -222,24 +368,37 @@ export default function App() {
     syncWateringSession(userId, key, newValue);
   }
 
+  if (showOnboarding) {
+    return (
+      <OnboardingCarousel
+        lang={lang}
+        onComplete={handleOnboardingComplete}
+        onRequestLocation={handleRequestLocation}
+        onRequestPush={() => handleTogglePush(true)}
+      />
+    );
+  }
+
   return (
     <div className="app">
       <main className="content">
         {activeTab === "best" && (
           <BestDayToWaterScreen
-            location={location}
-            locationName={locationName}
-            onLocationChange={handleLocationChange}
             advice={advice}
+            weatherInputs={weatherInputs}
+            gardenPlants={gardenPlants}
+            lastWateredDate={lastWateredDate}
+            wateringHistory={wateringHistory}
+            onToggleWateredDay={handleToggleWateredDay}
             dailyForecastNext5={dailyForecastNext5}
             isLoading={isLoading}
             error={error}
             onRetry={retry}
-            pushEnabled={pushEnabled}
-            pushIsLoading={pushLoading}
-            onTogglePush={handleTogglePush}
+            soilMultiplier={soilMultiplier}
+            sensitivityFactor={sensitivityFactor}
             lang={lang}
             onSetLang={handleSetLang}
+            locationName={locationName}
           />
         )}
 
@@ -248,6 +407,23 @@ export default function App() {
             userId={userId}
             onSyncPlants={syncPlants}
             lang={lang}
+            latitude={locationLat}
+          />
+        )}
+
+        {activeTab === "settings" && (
+          <SettingsScreen
+            locationName={locationName}
+            onLocationChange={handleLocationChange}
+            soilType={soilType}
+            onSoilTypeChange={handleSoilTypeChange}
+            sensitivity={sensitivity}
+            onSensitivityChange={handleSensitivityChange}
+            pushEnabled={pushEnabled}
+            pushIsLoading={pushLoading}
+            onTogglePush={handleTogglePush}
+            lang={lang}
+            onSetLang={handleSetLang}
           />
         )}
 
@@ -306,6 +482,18 @@ export default function App() {
             <img src="/hedgetrimmer3.png" alt="Pruning" width="22" height="22" style={{objectFit: "contain"}} />
           </span>
           <span className="tab-label">{t(lang, "tabPruning")}</span>
+        </button>
+        <button
+          type="button"
+          className={
+            activeTab === "settings"
+              ? "tab-bar-button tab-bar-button--active"
+              : "tab-bar-button"
+          }
+          onClick={() => setActiveTab("settings")}
+        >
+          <span className="tab-icon">⚙️</span>
+          <span className="tab-label">{t(lang, "tabSettings")}</span>
         </button>
       </nav>
     </div>

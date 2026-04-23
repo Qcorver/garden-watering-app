@@ -8,6 +8,8 @@
  * Usage:
  *   PERENUAL_API_KEY=sk-... SUPABASE_SERVICE_ROLE_KEY=eyJ... node scripts/seed-plants.mjs
  *
+ * Optionally set ANTHROPIC_API_KEY to also generate Dutch descriptions via Claude Haiku.
+ *
  * Get PERENUAL_API_KEY from: https://perenual.com/api/key-list
  * Get SUPABASE_SERVICE_ROLE_KEY from: Supabase dashboard → Settings → API → service_role key
  *
@@ -15,6 +17,7 @@
  * Re-run with SKIP_DETAILS=1 to only fetch Dutch names for plants that have none yet.
  */
 
+import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -22,8 +25,10 @@ import { createClient } from "@supabase/supabase-js";
 const PERENUAL_KEY = process.env.PERENUAL_API_KEY;
 const SUPABASE_URL = "https://hrnbrljlvmqmbdnagpsp.supabase.co";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY ?? null; // optional — Dutch descriptions skipped if absent
 
 const PAGES = parseInt(process.env.PAGES ?? "30", 10); // 30 pages ≈ 300 plants
+const START_PAGE = parseInt(process.env.START_PAGE ?? "1", 10); // skip already-seeded pages
 const DELAY_MS = 400; // delay between Perenual API calls
 const WIKIDATA_DELAY_MS = 150;
 
@@ -49,6 +54,30 @@ async function perenualGet(path) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Perenual ${path} → ${res.status}`);
   return res.json();
+}
+
+const anthropic = ANTHROPIC_KEY ? new Anthropic({ apiKey: ANTHROPIC_KEY }) : null;
+
+/**
+ * Translate a single English plant description to Dutch via Claude Haiku.
+ * Returns null if ANTHROPIC_KEY is not set or the request fails.
+ */
+async function translateToDutch(text) {
+  if (!anthropic || !text) return null;
+  try {
+    const message = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      system:
+        "You are a professional botanical translator. Translate the plant description from English to Dutch. " +
+        "Preserve the informational tone and botanical terminology. " +
+        "Return ONLY the translated text — no explanation, no markdown.",
+      messages: [{ role: "user", content: text }],
+    });
+    return message.content[0].text.trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -105,7 +134,7 @@ async function main() {
   let skipped = 0;
   let errors = 0;
 
-  for (let page = 1; page <= PAGES; page++) {
+  for (let page = START_PAGE; page <= PAGES; page++) {
     console.log(`\nPage ${page}/${PAGES}…`);
 
     let listData;
@@ -163,6 +192,9 @@ async function main() {
       await sleep(WIKIDATA_DELAY_MS);
       const nlName = await fetchDutchName(sciName);
 
+      // Translate description to Dutch via DeepL (skipped silently if no API key)
+      const descriptionNl = description ? await translateToDutch(description) : null;
+
       const row = {
         perenual_id: plant.id,
         scientific_name: sciName,
@@ -173,6 +205,7 @@ async function main() {
         cycle,
         maintenance,
         description,
+        description_nl: descriptionNl,
         image_url: imageUrl,
       };
 

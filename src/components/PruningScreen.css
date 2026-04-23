@@ -9,7 +9,7 @@
 /* ── Hero ── */
 .pruning-hero {
   background: linear-gradient(160deg, #1a3d1a 0%, #2d5a2d 40%, #3d7a3d 100%);
-  padding: 52px 28px 44px;
+  padding: 40px 28px 50px;
   position: relative;
   overflow: hidden;
 }
@@ -26,14 +26,64 @@
   pointer-events: none;
 }
 
+.pruning-hero-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  z-index: 1;
+  margin: 0 0 10px;
+}
+
 .pruning-hero-app-title {
   font-size: 11px;
   letter-spacing: 4px;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.5);
-  margin: 0 0 18px;
+  margin: 0;
   position: relative;
   z-index: 1;
+}
+
+.pruning-info-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 18px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* ── Info sheet ── */
+.pruning-info-sheet {
+  background: #ffffff;
+  border-radius: 28px 28px 0 0;
+  width: 100%;
+  padding: 32px 28px 40px;
+  position: relative;
+}
+
+.pruning-info-sheet-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a3d1a;
+  margin: 0 0 16px;
+  padding-right: 32px;
+}
+
+.pruning-info-sheet-body {
+  font-size: 15px;
+  line-height: 1.65;
+  color: #4a5e47;
+  margin: 0;
 }
 
 .pruning-hero-title-row {
@@ -78,6 +128,11 @@
   width: 40px;
   height: 40px;
   object-fit: contain;
+}
+
+.pruning-hero-emoji {
+  font-size: 36px;
+  line-height: 1;
 }
 
 .pruning-hero-month {
@@ -247,6 +302,8 @@
 .pruning-month-block--current {
   outline: 2px solid #3d7a3d;
   outline-offset: 1px;
+  position: relative;
+  z-index: 1;
 }
 
 /* Large variant (used in detail popup + add popup) */
@@ -334,7 +391,7 @@
 /* ── FAB ── */
 .pruning-fab {
   position: fixed;
-  bottom: calc(80px + var(--safe-bottom));
+  bottom: calc(100px + var(--safe-bottom));
   right: 20px;
   width: 56px;
   height: 56px;
@@ -350,7 +407,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: 60;
   transition: transform 0.15s, box-shadow 0.15s;
 }
 
@@ -507,6 +564,7 @@
   background: #ffffff;
   border-radius: 28px 28px 0 0;
   width: 100%;
+  min-height: 65vh;
   max-height: 92vh;
   display: flex;
   flex-direction: column;
@@ -798,6 +856,10 @@
   gap: 6px;
 }
 
+.pruning-dropdown-group--full {
+  grid-column: 1 / -1;
+}
+
 .pruning-dropdown-label {
   font-size: 10px;
   letter-spacing: 2px;
@@ -830,6 +892,11 @@
   border-radius: 12px 12px 0 0;
 }
 
+.pruning-custom-select-btn--placeholder span {
+  color: #aab8a4;
+  font-style: italic;
+}
+
 .pruning-custom-select-arrow {
   flex-shrink: 0;
   margin-left: 6px;
@@ -850,6 +917,17 @@
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   overflow: hidden;
   z-index: 10;
+}
+
+.pruning-custom-select--up .pruning-custom-select-menu {
+  top: auto;
+  bottom: 100%;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.pruning-custom-select--up.pruning-custom-select--open .pruning-custom-select-btn {
+  border-radius: 0 0 12px 12px;
 }
 
 .pruning-custom-select-option {

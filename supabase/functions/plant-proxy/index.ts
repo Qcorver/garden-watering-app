@@ -36,18 +36,39 @@ function toSearchResult(row: Record<string, unknown>, lang: string) {
     common_name: commonName,
     scientific_name: [row.scientific_name],
     cycle: row.cycle ?? null,
+    popularity_nl: row.popularity_nl ?? 0,
     default_image: row.image_url
       ? { thumbnail: row.image_url, medium_url: row.image_url }
       : null,
   };
 }
 
+async function fetchINatThumbnail(scientificName: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://api.inaturalist.org/v1/taxa?q=${encodeURIComponent(scientificName)}&per_page=1&locale=en`,
+      { headers: { "User-Agent": "garden-watering-app/1.0" } },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const photo = data?.results?.[0]?.default_photo;
+    return photo?.medium_url ?? photo?.square_url ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // Map a plant_species DB row to the shape perenualClient.js expects for details
-function toDetailsResult(row: Record<string, unknown>, lang: string) {
+function toDetailsResult(row: Record<string, unknown>, lang: string, imageUrl: string | null) {
   const commonName =
     lang === "nl"
       ? (row.common_name_nl as string | null) ?? (row.common_name_en as string | null)
       : (row.common_name_en as string | null);
+
+  const description =
+    lang === "nl"
+      ? (row.description_nl as string | null) ?? (row.description as string | null)
+      : (row.description as string | null);
 
   return {
     id: row.id,
@@ -60,9 +81,9 @@ function toDetailsResult(row: Record<string, unknown>, lang: string) {
     sunlight: row.sunlight ?? [],
     cycle: row.cycle ?? null,
     maintenance: row.maintenance ?? null,
-    description: row.description ?? null,
-    default_image: row.image_url
-      ? { thumbnail: row.image_url, medium_url: row.image_url }
+    description,
+    default_image: imageUrl
+      ? { thumbnail: imageUrl, medium_url: imageUrl }
       : null,
   };
 }
@@ -103,8 +124,10 @@ Deno.serve(async (req) => {
 
         const { data, error } = await supabase
           .from("plant_species")
-          .select("id, perenual_id, common_name_en, common_name_nl, scientific_name, cycle, image_url")
+          .select("id, perenual_id, common_name_en, common_name_nl, scientific_name, cycle, image_url, popularity_nl")
           .or(`${nameCol}.ilike.${pattern},scientific_name.ilike.${pattern}`)
+          .order("popularity_nl", { ascending: false, nullsFirst: false })
+          .order(nameCol, { ascending: true })
           .limit(10);
 
         if (error) throw error;
@@ -145,7 +168,49 @@ Deno.serve(async (req) => {
           return Response.json({ error: "Plant not found" }, { status: 404, headers: cors });
         }
 
-        return Response.json(toDetailsResult(data, lang), { headers: cors });
+        // If no image in DB (or broken Perenual/Wikimedia URL), fetch from iNaturalist and cache it
+        let imageUrl = data.image_url as string | null;
+        const needsFetch = !imageUrl || imageUrl.includes("perenual.com") || imageUrl.includes("wikimedia.org");
+        if (needsFetch) {
+          const sciName = data.scientific_name as string;
+          const wikiThumb = await fetchINatThumbnail(sciName);
+          if (wikiThumb) {
+            imageUrl = wikiThumb;
+            // Cache in DB so next request is instant (fire-and-forget)
+            supabase
+              .from("plant_species")
+              .update({ image_url: wikiThumb })
+              .eq("id", data.id)
+              .then(() => {});
+          }
+        }
+
+        return Response.json(toDetailsResult(data, lang, imageUrl), { headers: cors });
+      }
+
+      case "image": {
+        const imgUrl = url.searchParams.get("url") ?? "";
+        if (!imgUrl.startsWith("https://upload.wikimedia.org/")) {
+          return Response.json({ error: "Invalid URL" }, { status: 400, headers: cors });
+        }
+        const imgRes = await fetch(imgUrl, {
+          headers: {
+            "User-Agent": "garden-watering-app/1.0 (image-proxy)",
+            "Referer": "https://en.wikipedia.org/",
+          },
+        });
+        if (!imgRes.ok) {
+          return Response.json({ error: `Upstream ${imgRes.status}` }, { status: 502, headers: cors });
+        }
+        const contentType = imgRes.headers.get("content-type") ?? "image/jpeg";
+        const data = await imgRes.arrayBuffer();
+        return new Response(data, {
+          headers: {
+            ...cors,
+            "Content-Type": contentType,
+            "Cache-Control": "public, max-age=86400, stale-while-revalidate=86400",
+          },
+        });
       }
 
       default:

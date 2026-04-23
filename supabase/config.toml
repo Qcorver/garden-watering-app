@@ -383,6 +383,12 @@ s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
 
+[functions.push-daily]
+enabled = true
+verify_jwt = false
+import_map = "./functions/push-daily/deno.json"
+entrypoint = "./functions/push-daily/index.ts"
+
 [functions.push-test]
 enabled = true
 verify_jwt = false
