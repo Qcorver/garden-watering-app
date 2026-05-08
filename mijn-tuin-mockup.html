@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Mijn Tuin – Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: #f0f4ec;
+      color: #1a3d1a;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    /* ── Phone frame ── */
+    .phone {
+      width: 390px;
+      min-height: 844px;
+      background: #f0f4ec;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 32px 80px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.08);
+      border-radius: 48px;
+      margin: 32px auto;
+    }
+
+    /* ── Status bar simulation ── */
+    .status-bar {
+      background: #1a3d1a;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 28px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.75);
+    }
+
+    /* ── Hero header ── */
+    .hero {
+      background: linear-gradient(160deg, #1a3d1a 0%, #2d5a2d 40%, #3d7a3d 100%);
+      padding: 20px 24px 28px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -50px; right: -50px;
+      width: 220px; height: 220px;
+      background: radial-gradient(circle, rgba(120,200,80,0.15) 0%, transparent 70%);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    .hero::after {
+      content: '';
+      position: absolute;
+      bottom: -20px; left: -30px;
+      width: 160px; height: 160px;
+      background: radial-gradient(circle, rgba(80,160,60,0.1) 0%, transparent 70%);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .hero-eyebrow {
+      font-size: 10px;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.45);
+      margin-bottom: 6px;
+    }
+    .hero-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      line-height: 1.15;
+      position: relative;
+      z-index: 1;
+    }
+    .hero-subtitle {
+      font-size: 13px;
+      color: rgba(255,255,255,0.55);
+      margin-top: 6px;
+      font-weight: 400;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Scrollable body ── */
+    .screen-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* ── 2×2 grid ── */
+    .garden-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* ── Tile base ── */
+    .tile {
+      background: #fff;
+      border-radius: 20px;
+      padding: 18px 16px 16px;
+      box-shadow: 0 2px 12px rgba(26,61,26,0.07), 0 1px 3px rgba(26,61,26,0.05);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      min-height: 160px;
+      position: relative;
+      overflow: hidden;
+    }
+    .tile:active { transform: scale(0.97); }
+
+    /* colour accent strip at top */
+    .tile::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      border-radius: 20px 20px 0 0;
+    }
+    .tile--pruning::before  { background: linear-gradient(90deg, #3d7a3d, #78c850); }
+    .tile--wishlist::before { background: linear-gradient(90deg, #c0694b, #e8a07a); }
+    .tile--veggie::before   { background: linear-gradient(90deg, #7a6d3d, #c8b450); }
+    .tile--ai::before       { background: linear-gradient(90deg, #3d5a7a, #5090c8); }
+
+    .tile-icon {
+      font-size: 30px;
+      line-height: 1;
+      margin-top: 2px;
+    }
+    .tile-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 15px;
+      font-weight: 600;
+      color: #1a3d1a;
+      line-height: 1.2;
+    }
+    .tile-desc {
+      font-size: 11px;
+      color: #6b8c6b;
+      line-height: 1.45;
+      flex: 1;
+    }
+
+    /* ── Pruning tile: mini plant rows ── */
+    .tile-preview {
+      margin-top: 2px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .preview-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      color: #4a7a4a;
+    }
+    .preview-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .preview-dot--now    { background: #e8483a; }
+    .preview-dot--soon   { background: #e8943a; }
+    .preview-dot--later  { background: #78c850; }
+
+    /* ── Wishlist tile: small plant chips ── */
+    .wishlist-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 2px;
+    }
+    .wishlist-chip {
+      background: #fef0eb;
+      border: 1px solid #f0c4b0;
+      border-radius: 20px;
+      padding: 2px 8px;
+      font-size: 9px;
+      font-weight: 500;
+      color: #a04830;
+      white-space: nowrap;
+    }
+    .wishlist-add {
+      background: #fff5f2;
+      border: 1px dashed #e8a07a;
+      border-radius: 20px;
+      padding: 2px 8px;
+      font-size: 9px;
+      font-weight: 500;
+      color: #c0694b;
+    }
+
+    /* ── Veggie tile: stage bar ── */
+    .veggie-stages {
+      display: flex;
+      gap: 3px;
+      margin-top: 4px;
+      align-items: flex-end;
+    }
+    .stage-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      flex: 1;
+    }
+    .stage-bar {
+      width: 100%;
+      border-radius: 4px;
+      background: #e8f0e8;
+    }
+    .stage-bar--filled { background: #78c850; }
+    .stage-label {
+      font-size: 8px;
+      color: #6b8c6b;
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    /* ── AI tile ── */
+    .ai-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin-top: 2px;
+    }
+    .ai-action-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #f0f6ff;
+      border: 1px solid #c8dff0;
+      border-radius: 10px;
+      padding: 5px 8px;
+      font-size: 10px;
+      color: #2a4d7a;
+      font-weight: 500;
+    }
+    .ai-action-icon { font-size: 12px; }
+
+    /* ── Seasonal tip card ── */
+    .tip-card {
+      background: linear-gradient(135deg, #fff8ec 0%, #fffbf0 100%);
+      border: 1px solid rgba(200,180,80,0.3);
+      border-radius: 16px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .tip-icon { font-size: 22px; flex-shrink: 0; }
+    .tip-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #6b5a1a;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 3px;
+    }
+    .tip-body {
+      font-size: 12px;
+      color: #7a6b3d;
+      line-height: 1.45;
+    }
+
+    /* ── Tab bar ── */
+    .tabs {
+      background: rgba(240,244,236,0.95);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid rgba(0,0,0,0.06);
+      padding: 8px 16px 20px;
+      display: flex;
+      justify-content: space-around;
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.04);
+    }
+    .tab-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      flex: 1;
+      padding: 8px 0;
+      border-radius: 14px;
+    }
+    .tab-btn--active { background: rgba(61,122,61,0.1); }
+    .tab-icon { font-size: 22px; line-height: 1; }
+    .tab-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: #9aab94;
+    }
+    .tab-btn--active .tab-label { color: #3d7a3d; }
+
+  </style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- status bar -->
+  <div class="status-bar">
+    <span>9:41</span>
+    <span>●●●●○ WiFi 🔋</span>
+  </div>
+
+  <!-- hero -->
+  <div class="hero">
+    <div class="hero-eyebrow">WHEN TO WATER</div>
+    <div class="hero-title">Mijn Tuin</div>
+    <div class="hero-subtitle">4 planten · mei 2026</div>
+  </div>
+
+  <!-- scrollable body -->
+  <div class="screen-body">
+
+    <!-- 2×2 grid -->
+    <div class="garden-grid">
+
+      <!-- Tile 1: Snoeien -->
+      <div class="tile tile--pruning">
+
+        <div class="tile-icon">✂️</div>
+        <div class="tile-title">Snoeien</div>
+        <div class="tile-desc">Wanneer snoeien?</div>
+        <div class="tile-preview">
+          <div class="preview-row">
+            <div class="preview-dot preview-dot--now"></div>
+            <span>Roos — nu</span>
+          </div>
+          <div class="preview-row">
+            <div class="preview-dot preview-dot--soon"></div>
+            <span>Hortensia — jun</span>
+          </div>
+          <div class="preview-row">
+            <div class="preview-dot preview-dot--later"></div>
+            <span>Lavendel — jul</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tile 2: Verlanglijst -->
+      <div class="tile tile--wishlist">
+
+        <div class="tile-icon">🌱</div>
+        <div class="tile-title">Verlanglijst</div>
+        <div class="tile-desc">Planten die je wilt toevoegen</div>
+        <div class="wishlist-chips">
+          <span class="wishlist-chip">🌿 Mint</span>
+          <span class="wishlist-chip">🌸 Pioenroos</span>
+          <span class="wishlist-chip">🌿 Salie</span>
+          <span class="wishlist-add">+ Toevoegen</span>
+        </div>
+      </div>
+
+      <!-- Tile 3: Moestuin -->
+      <div class="tile tile--veggie">
+
+        <div class="tile-icon">🥕</div>
+        <div class="tile-title">Moestuin</div>
+        <div class="tile-desc">Groenten &amp; kruiden</div>
+        <div class="veggie-stages">
+          <div class="stage-item">
+            <div class="stage-bar stage-bar--filled" style="height:20px"></div>
+            <div class="stage-label">Zaad</div>
+          </div>
+          <div class="stage-item">
+            <div class="stage-bar stage-bar--filled" style="height:28px"></div>
+            <div class="stage-label">Zaai&shy;ling</div>
+          </div>
+          <div class="stage-item">
+            <div class="stage-bar" style="height:20px"></div>
+            <div class="stage-label">Groei</div>
+          </div>
+          <div class="stage-item">
+            <div class="stage-bar" style="height:16px"></div>
+            <div class="stage-label">Oogst</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tile 4: AI-assistent -->
+      <div class="tile tile--ai">
+
+        <div class="tile-icon">🤖</div>
+        <div class="tile-title">AI-assistent</div>
+        <div class="tile-desc">Advies op maat</div>
+        <div class="ai-actions">
+          <div class="ai-action-btn">
+            <span class="ai-action-icon">📷</span>
+            <span>Zieke plant herkennen</span>
+          </div>
+          <div class="ai-action-btn">
+            <span class="ai-action-icon">💬</span>
+            <span>Wat past in mijn tuin?</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /grid -->
+
+    <!-- Seizoen-tip card -->
+    <div class="tip-card">
+      <div class="tip-icon">☀️</div>
+      <div>
+        <div class="tip-title">Mei-tip</div>
+        <div class="tip-body">
+          Goed moment om tomatenplanten buiten te zetten — nachtvorstkans is nu minimaal.
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /screen-body -->
+
+  <!-- tab bar -->
+  <div class="tabs">
+    <button class="tab-btn">
+      <span class="tab-icon">💧</span>
+      <span class="tab-label">Wanneer</span>
+    </button>
+    <button class="tab-btn">
+      <span class="tab-icon">📅</span>
+      <span class="tab-label">Kalender</span>
+    </button>
+    <button class="tab-btn tab-btn--active">
+      <span class="tab-icon">🌿</span>
+      <span class="tab-label">Mijn Tuin</span>
+    </button>
+    <button class="tab-btn">
+      <span class="tab-icon">⚙️</span>
+      <span class="tab-label">Instellingen</span>
+    </button>
+  </div>
+
+</div><!-- /phone -->
+</body>
+</html>

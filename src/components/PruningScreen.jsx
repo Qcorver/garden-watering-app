@@ -908,8 +908,11 @@ export function PruningScreen({ onSyncPlants, lang = "en", latitude = null }) {
         </div>
         <div className="pruning-hero-title-row">
           <div>
-            <h1 className="pruning-hero-heading">{t(lang, "pruneHeroHeading")}</h1>
-            <p className="pruning-hero-sub">{t(lang, "pruneHeroSub")}</p>
+            <h1 className="pruning-hero-heading">
+              {t(lang, "pruneHeroHeading").split("\n").map((line, i) => (
+                <React.Fragment key={i}>{line}{i === 0 && <br />}</React.Fragment>
+              ))}
+            </h1>
           </div>
           <div className="pruning-hero-month-badge">
             <img src="/hedgetrimmer3.png" alt="" className="pruning-hero-scissors" />

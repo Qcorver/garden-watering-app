@@ -195,11 +195,13 @@ async function fetchRainData(lat: number, lon: number) {
 
   const histStart = Math.max(0, todayIdx - 7);
   const past7 = sums.slice(histStart, todayIdx);
-  const past5 = past7.slice(-5);
-  const past3 = past7.slice(-3);
-  const past2 = past7.slice(-2);
   const next5 = sums.slice(todayIdx, todayIdx + 5);
   const next3 = next5.slice(0, 3);
+
+  // Include today's accumulated precipitation in the wet-soil gates so that
+  // rain falling right now (e.g. morning before the 10:00 push) prevents a
+  // false "water your garden" notification.
+  const todayMm = sums[todayIdx] ?? 0;
 
   const tempLast7 = times.slice(histStart, todayIdx).map((d, i) => {
     const absIdx = histStart + i;
@@ -212,11 +214,14 @@ async function fetchRainData(lat: number, lon: number) {
 
   return {
     timezone,
+    // rainLast7 stays historical-only so weeklyRainCoverage (rainLast7 + rainNext3) doesn't
+    // double-count today (today is already in rainNext3 as the first forecast day).
     rainLast7: sum(past7),
-    rainLast5Days: sum(past5),
-    rainLast3Days: sum(past3),
-    rainLast2Days: sum(past2),
-    maxDailyRainLast7: past7.length > 0 ? Math.max(...past7) : 0,
+    // Gate values include today so the wet-soil check is based on true recent precipitation.
+    rainLast5Days: sum(past7.slice(-4)) + todayMm,
+    rainLast3Days: sum(past7.slice(-2)) + todayMm,
+    rainLast2Days: sum(past7.slice(-1)) + todayMm,
+    maxDailyRainLast7: past7.length > 0 ? Math.max(todayMm, ...past7) : todayMm,
     rainNext3: sum(next3),
     forecastDays: next5.map((mm, i) => ({
       date: times[todayIdx + i] ?? null,
@@ -550,6 +555,12 @@ Deno.serve(async (req) => {
               });
 
               if (!r.ok) {
+                if (r.status === 404) {
+                  await supabase
+                    .from("push_devices")
+                    .update({ is_enabled: false })
+                    .eq("push_token", tokenRaw);
+                }
                 return {
                   kind: "error",
                   status: r.status,
@@ -573,11 +584,10 @@ Deno.serve(async (req) => {
             );
 
             if (plantsThisMonth.length > 0) {
-              const plantNames = plantsThisMonth.map((p) => p.common_name).join(", ");
-              const pruningTitle = userLang === "nl" ? "Tuin Bewatering" : title;
+              const pruningTitle = userLang === "nl" ? "Snoeitijd!" : "Time to Prune!";
               const pruningBody = userLang === "nl"
-                ? "Het is tijd om te snoeien! — open de app om te zien welke planten."
-                : "It's time to prune! — open the app to find out which plants.";
+                ? "Tijd om te snoeien! Open de app om te zien welke planten gesnoeid kunnen worden."
+                : "Time to prune! Open the app to see which plants need pruning.";
 
               if (!dryRun) {
                 const pr = await sendFcm(

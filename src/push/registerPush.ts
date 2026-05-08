@@ -73,6 +73,7 @@ let lastToken: string | null = null;
 let lastPlatform: NativePlatform | null = null;
 let tokenTimeoutId: number | null = null;
 let listenerHandles: PluginListenerHandle[] = [];
+let storedOnToken: ((token: string, platform: NativePlatform) => Promise<void> | void) | null = null;
 
 export async function registerForPushNotifications(
   onToken: (token: string, platform: NativePlatform) => Promise<void> | void,
@@ -115,9 +116,27 @@ export async function registerForPushNotifications(
       return false;
     }
 
+    storedOnToken = onToken;
+
     // Attach listeners once (don’t wipe them during an in-flight registration)
     if (!listenersAttached) {
       listenersAttached = true;
+
+      listenerHandles.push(
+        await FirebaseMessaging.addListener("tokenReceived", async ({ token }) => {
+          if (!token) return;
+          console.log("[push] FCM token refreshed:", token);
+          lastToken = token;
+          tokenReceived = true;
+          if (storedOnToken && lastPlatform) {
+            try {
+              await storedOnToken(token, lastPlatform);
+            } catch (e) {
+              console.error("[push] storedOnToken handler failed (tokenReceived):", e);
+            }
+          }
+        })
+      );
 
       listenerHandles.push(
         await PushNotifications.addListener("registration", async (token) => {
@@ -256,6 +275,36 @@ export async function registerForPushNotifications(
   } catch (err) {
     console.error("[push] Failed to register for push notifications:", err);
     return false;
+  }
+}
+
+/**
+ * Silently fetch the current FCM token without showing any UI or permission dialogs.
+ * Calls onToken only if permission is already granted. Safe to call on every app launch.
+ */
+export async function silentRefreshToken(
+  onToken: (token: string, platform: NativePlatform) => Promise<void> | void,
+): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  const platform = getNativePlatform();
+  if (!platform) return;
+
+  try {
+    const perm = await PushNotifications.checkPermissions();
+    if (perm.receive !== "granted") return;
+
+    const result = await FirebaseMessaging.getToken();
+    if (!result?.token) return;
+
+    const token = result.token;
+    storedOnToken = onToken;
+    lastPlatform = platform;
+    lastToken = token;
+    tokenReceived = true;
+
+    await onToken(token, platform);
+  } catch (e) {
+    console.warn("[push] silentRefreshToken failed:", e);
   }
 }
 

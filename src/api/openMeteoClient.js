@@ -1,24 +1,36 @@
 export async function fetchRainHistory(lat, lon, signal) {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=7&forecast_days=0&daily=rain_sum,temperature_2m_max,temperature_2m_min&timezone=auto`;
+  // forecast_days=1 includes today's nowcast so the wet-soil gates capture rain falling right now.
+  // precipitation_sum covers all precipitation types (rain + showers + drizzle), unlike rain_sum
+  // which only counts large-scale systems and misses convective showers common in NL in spring/summer.
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=7&forecast_days=1&daily=precipitation_sum,temperature_2m_max,temperature_2m_min&timezone=auto`;
 
   const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(`Failed to fetch historical rain data (${res.status})`);
   const data = await res.json();
 
   const dates = data.daily?.time ?? [];
-  const rain = data.daily?.rain_sum ?? []; // array (oldest -> newest)
+  const rain = data.daily?.precipitation_sum ?? []; // oldest → newest; index 7 = today (nowcast)
   const tmaxArr = data.daily?.temperature_2m_max ?? [];
   const tminArr = data.daily?.temperature_2m_min ?? [];
 
   const safe = rain.map(v => (typeof v === "number" ? v : 0));
 
-  const rainLast7Total = safe.reduce((s, v) => s + v, 0);
-  const rainLast2Days = safe.slice(-2).reduce((s, v) => s + v, 0);
-  const rainLast3Days = safe.slice(-3).reduce((s, v) => s + v, 0);
-  const rainLast5Days = safe.slice(-5).reduce((s, v) => s + v, 0);
-  const maxDailyRainLast7 = Math.max(0, ...safe);
+  // Separate the 7 historical days from today's nowcast entry.
+  const historical = safe.slice(0, 7);
+  const todayMm = safe.length >= 8 ? safe[7] : 0;
 
-  const allTempDays = dates.map((d, i) => ({ date: new Date(`${d}T00:00:00`), tmax: tmaxArr[i], tmin: tminArr[i] }));
+  // rainLast7Total uses historical only — today is already in rainNext3 (from OpenWeather forecast)
+  // so including it here would double-count it in weeklyRainCoverage.
+  const rainLast7Total = historical.reduce((s, v) => s + v, 0);
+
+  // Wet-soil gates include today so that rain falling right now is picked up immediately.
+  const rainLast2Days = historical.slice(-1).reduce((s, v) => s + v, 0) + todayMm;
+  const rainLast3Days = historical.slice(-2).reduce((s, v) => s + v, 0) + todayMm;
+  const rainLast5Days = historical.slice(-4).reduce((s, v) => s + v, 0) + todayMm;
+  const maxDailyRainLast7 = Math.max(0, todayMm, ...historical);
+
+  // Temperature data is for historical days only (ET₀ computation doesn't need today).
+  const allTempDays = dates.slice(0, 7).map((d, i) => ({ date: new Date(`${d}T00:00:00`), tmax: tmaxArr[i], tmin: tminArr[i] }));
   const tempLast7 = allTempDays.filter(d => typeof d.tmax === "number" && typeof d.tmin === "number");
   if (tempLast7.length < allTempDays.length) {
     console.warn(`[openMeteo] ${allTempDays.length - tempLast7.length} day(s) dropped from ET₀ calculation due to missing temperature data`);
@@ -32,7 +44,7 @@ export async function fetchRainHistory(lat, lon, signal) {
  * Returns: [{ date: Date, rainMm: number }]
  */
 export async function fetchDailyRainHistory(lat, lon, pastDays = 30, signal) {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=${pastDays}&forecast_days=0&daily=rain_sum&timezone=auto`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=${pastDays}&forecast_days=0&daily=precipitation_sum&timezone=auto`;
 
   const res = await fetch(url, { signal });
   if (!res.ok) {
@@ -41,7 +53,7 @@ export async function fetchDailyRainHistory(lat, lon, pastDays = 30, signal) {
 
   const data = await res.json();
   const dates = data.daily?.time ?? [];
-  const rain = data.daily?.rain_sum ?? [];
+  const rain = data.daily?.precipitation_sum ?? [];
 
   return dates.map((d, i) => ({
     date: new Date(`${d}T00:00:00`),

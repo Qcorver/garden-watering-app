@@ -369,6 +369,7 @@
   font-size: 14px;
   font-weight: 600;
   color: #1a3d1a;
+  flex: 1;
 }
 
 .best-cat-card--water .best-cat-name {

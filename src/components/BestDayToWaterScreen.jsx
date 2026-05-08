@@ -146,12 +146,7 @@ export function BestDayToWaterScreen({
 
   const dateLocale = getDateLocale(lang);
 
-  // Date shown in the hero — best watering date if applicable, otherwise today
-  let heroDateRaw = new Date();
-  if (shouldWater && bestWateringDate) {
-    const parsed = bestWateringDate instanceof Date ? bestWateringDate : new Date(bestWateringDate);
-    if (!isNaN(parsed.getTime())) heroDateRaw = parsed;
-  }
+  const heroDateRaw = new Date();
 
   const heroDay = format(heroDateRaw, "d");
   const heroMonth = format(heroDateRaw, "MMMM", { locale: dateLocale });

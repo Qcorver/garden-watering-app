@@ -1,14 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "../supabaseClient";
-import { registerForPushNotifications } from "../push/registerPush";
+import { registerForPushNotifications, silentRefreshToken } from "../push/registerPush";
 
 export function usePushNotifications(userId, ensureAuthUserId) {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [deviceToken, setDeviceToken] = useState(null);
-  const [hasAutoRegisteredPush, setHasAutoRegisteredPush] = useState(false);
-  const [pushPrefsLoaded, setPushPrefsLoaded] = useState(false);
 
   const toggleInFlightRef = useRef(false);
   const lastToggleRequestedRef = useRef(null);
@@ -50,13 +48,31 @@ export function usePushNotifications(userId, ensureAuthUserId) {
             console.warn("Could not load existing device token", devErr);
           } else if (dev?.push_token && !cancelled) {
             setDeviceToken(dev.push_token);
-            setHasAutoRegisteredPush(true);
           }
+
+          // Silently refresh the FCM token in the background so stale tokens
+          // get updated without showing a loading state.
+          const timezone =
+            Intl?.DateTimeFormat?.().resolvedOptions?.().timeZone || "Europe/Amsterdam";
+          silentRefreshToken(async (token, plt) => {
+            if (cancelled) return;
+            setDeviceToken(token);
+            await supabase.from("push_devices").upsert(
+              {
+                user_id: userId,
+                platform: plt,
+                push_token: token,
+                timezone,
+                is_enabled: true,
+                last_seen_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "push_token" }
+            );
+          });
         }
       } catch (err) {
         console.error("Failed to load push preferences", err);
-      } finally {
-        if (!cancelled) setPushPrefsLoaded(true);
       }
     }
 
@@ -64,23 +80,6 @@ export function usePushNotifications(userId, ensureAuthUserId) {
     return () => { cancelled = true; };
   }, [userId]);
 
-  // Auto-register native push once if preference is enabled
-  useEffect(() => {
-    if (!pushPrefsLoaded) return;
-    if (!userId) return;
-    if (!pushEnabled) return;
-    if (hasAutoRegisteredPush) return;
-    if (pushLoading) return;
-
-    if (deviceToken) {
-      setHasAutoRegisteredPush(true);
-      return;
-    }
-
-    setHasAutoRegisteredPush(true);
-    handleTogglePush(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pushPrefsLoaded, userId, pushEnabled, hasAutoRegisteredPush, pushLoading, deviceToken]);
 
   async function handleTogglePush(nextEnabled) {
     if (toggleInFlightRef.current) return;
@@ -106,7 +105,6 @@ export function usePushNotifications(userId, ensureAuthUserId) {
         Intl?.DateTimeFormat?.().resolvedOptions?.().timeZone || "Europe/Amsterdam";
 
       if (nextEnabled) {
-        setHasAutoRegisteredPush(true);
         setPushEnabled(true);
 
         if (deviceToken) {
@@ -173,6 +171,17 @@ export function usePushNotifications(userId, ensureAuthUserId) {
           toggleInFlightRef.current = false;
           return;
         }
+
+        // Safety net: if APNs token never arrives (simulator, network issue),
+        // clear the loading state after 12s so the UI doesn't stay stuck.
+        setTimeout(() => {
+          if (toggleInFlightRef.current) {
+            console.warn("[push] token timeout — clearing loading state");
+            setPushEnabled(false);
+            setPushLoading(false);
+            toggleInFlightRef.current = false;
+          }
+        }, 12_000);
       } else {
         if (deviceToken) {
           const { error: devOffErr } = await supabase

@@ -298,8 +298,9 @@ describe("calculateWateringAdvice", () => {
     });
 
     it("recommends watering when rainLast7 < 80% of weekly target (no forecast)", () => {
-      // 80% of 24 = 19.2; use 18mm → below threshold, forecast = 0 → should water
-      const result = calculateWateringAdvice(dryInputs({ rainLast7: 18 }));
+      // weeklyTarget = 24 in July; 80% = 19.2mm; use 10mm → deficit = 14mm → ~1 min → should water
+      // (with WATERING_RATE_L_PER_MIN = 15, deficit must be >= 7.5mm to round to ≥ 1 min)
+      const result = calculateWateringAdvice(dryInputs({ rainLast7: 10 }));
       expect(result.shouldWater).toBe(true);
     });
 
