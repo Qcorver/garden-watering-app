@@ -6,6 +6,7 @@ import { t } from "./i18n";
 import { BestDayToWaterScreen } from "./components/BestDayToWaterScreen";
 import { CalendarScreen } from "./components/CalendarScreen";
 import { PruningScreen, detectWaterCategory } from "./components/PruningScreen";
+import { CATEGORIES, calculateWateringAdvice } from "@shared/wateringLogic";
 import { SettingsScreen, getSoilMultiplier } from "./components/SettingsScreen";
 import { OnboardingCarousel } from "./components/OnboardingCarousel";
 
@@ -222,6 +223,39 @@ export default function App() {
     locationName, lastWateredDate, { soilMultiplier, sensitivityFactor }
   );
 
+  // Earliest date where any category (or main advice) needs watering → "Beste dag" on calendar.
+  const effectiveBestWateringDate = useMemo(() => {
+    const candidates = [];
+
+    if (advice?.shouldWater && advice?.bestWateringDate) {
+      candidates.push(new Date(advice.bestWateringDate));
+    }
+
+    if (weatherInputs && gardenPlants.length > 0) {
+      const seenCategories = new Set();
+      for (const plant of gardenPlants) {
+        const cat = plant.waterCategory ?? detectWaterCategory(plant);
+        if (!CATEGORIES[cat] || seenCategories.has(cat)) continue;
+        seenCategories.add(cat);
+        const { multiplier, rainEfficiency } = CATEGORIES[cat];
+        const ca = calculateWateringAdvice({
+          ...weatherInputs,
+          weeklyTargetMultiplier: multiplier,
+          rainEfficiency,
+          lastWateredDate,
+          soilMultiplier,
+          sensitivityFactor,
+        });
+        if (ca.shouldWater && ca.bestWateringDate) {
+          candidates.push(new Date(ca.bestWateringDate));
+        }
+      }
+    }
+
+    if (candidates.length === 0) return null;
+    return candidates.reduce((earliest, d) => (d < earliest ? d : earliest));
+  }, [advice, weatherInputs, gardenPlants, lastWateredDate, soilMultiplier, sensitivityFactor]);
+
   // Silently refresh pruning months from plant_species once after auth,
   // so corrections to the canonical data reach users without re-adding plants.
   useEffect(() => {
@@ -429,7 +463,7 @@ export default function App() {
 
         {activeTab === "calendar" && (
           <CalendarScreen
-            advice={advice}
+            effectiveBestWateringDate={effectiveBestWateringDate}
             dailyForecastNext5={dailyForecastNext5}
             historicalDailyRain={historicalDailyRain}
             wateringHistory={wateringHistory}
@@ -447,52 +481,42 @@ export default function App() {
       <nav className="tab-bar tabs">
         <button
           type="button"
-          className={
-            activeTab === "best"
-              ? "tab-bar-button tab-bar-button--active"
-              : "tab-bar-button"
-          }
+          className={activeTab === "best" ? "tab-bar-button tab-bar-button--active" : "tab-bar-button"}
           onClick={() => setActiveTab("best")}
         >
-          <span className="tab-icon">💧</span>
+          <span className="tab-icon">
+            <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21l-1.45-1.45C5.4 14.88 2 11.8 2 8c0-3.08 2.42-5.5 5.5-5.5 1.74 0 3.41.81 4.5 2.09C13.09 3.31 14.76 2.5 16.5 2.5 19.58 2.5 22 4.92 22 8c0 3.8-3.4 6.88-8.55 11.55L12 21z"/></svg>
+          </span>
           <span className="tab-label">{t(lang, "tabBestDay")}</span>
         </button>
         <button
           type="button"
-          className={
-            activeTab === "calendar"
-              ? "tab-bar-button tab-bar-button--active"
-              : "tab-bar-button"
-          }
+          className={activeTab === "calendar" ? "tab-bar-button tab-bar-button--active" : "tab-bar-button"}
           onClick={() => setActiveTab("calendar")}
         >
-          <span className="tab-icon">📅</span>
+          <span className="tab-icon">
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          </span>
           <span className="tab-label">{t(lang, "tabCalendar")}</span>
         </button>
         <button
           type="button"
-          className={
-            activeTab === "pruning"
-              ? "tab-bar-button tab-bar-button--active"
-              : "tab-bar-button"
-          }
+          className={activeTab === "pruning" ? "tab-bar-button tab-bar-button--active" : "tab-bar-button"}
           onClick={() => setActiveTab("pruning")}
         >
           <span className="tab-icon">
-            <img src="/hedgetrimmer3.png" alt="Pruning" width="22" height="22" style={{objectFit: "contain"}} />
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758L5 19m0-14l4.121 4.121"/></svg>
           </span>
           <span className="tab-label">{t(lang, "tabPruning")}</span>
         </button>
         <button
           type="button"
-          className={
-            activeTab === "settings"
-              ? "tab-bar-button tab-bar-button--active"
-              : "tab-bar-button"
-          }
+          className={activeTab === "settings" ? "tab-bar-button tab-bar-button--active" : "tab-bar-button"}
           onClick={() => setActiveTab("settings")}
         >
-          <span className="tab-icon">⚙️</span>
+          <span className="tab-icon">
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          </span>
           <span className="tab-label">{t(lang, "tabSettings")}</span>
         </button>
       </nav>

@@ -16,7 +16,7 @@ import { t, getDateLocale } from "../i18n";
 
 /**
  * @param {Object} props
- * @param {Object|null} props.advice
+ * @param {Date|null} props.effectiveBestWateringDate
  * @param {Array<Object>} props.dailyForecastNext5
  * @param {Array<Object>} props.historicalDailyRain
  *   - items: { date: Date|string, rainMm: number, cloudCoverMean?: number|null }
@@ -46,7 +46,7 @@ function InfoSheet({ title, body, onClose }) {
 }
 
 export function CalendarScreen({
-  advice,
+  effectiveBestWateringDate,
   dailyForecastNext5,
   historicalDailyRain,
   wateringHistory,
@@ -131,8 +131,8 @@ export function CalendarScreen({
   };
 
   const isBestWateringDay = (day) => {
-    if (!advice?.shouldWater || !advice?.bestWateringDate) return false;
-    return isSameDay(day, advice.bestWateringDate);
+    if (!effectiveBestWateringDate) return false;
+    return isSameDay(day, effectiveBestWateringDate);
   };
 
   const isWateredDay = (day) => Boolean(wateringHistory[format(day, "yyyy-MM-dd")]);
