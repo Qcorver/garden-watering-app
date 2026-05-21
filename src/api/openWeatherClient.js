@@ -112,18 +112,24 @@ export function extractRainDataFromForecast(forecast) {
     const rain3h = entry.rain?.["3h"] ?? 0;
     const main = entry.weather?.[0]?.main ?? null;
     const score = main ? conditionRank[main] ?? 0 : 0;
+    const tmax = entry.main?.temp_max ?? null;
+    const tmin = entry.main?.temp_min ?? null;
 
     const prev =
       byDay.get(dayKey) ?? {
         rainMm: 0,
         main: null,
         score: 0,
+        tmax: null,
+        tmin: null,
       };
 
     const next = {
       rainMm: prev.rainMm + rain3h,
       main: prev.main,
       score: prev.score,
+      tmax: tmax !== null ? (prev.tmax !== null ? Math.max(prev.tmax, tmax) : tmax) : prev.tmax,
+      tmin: tmin !== null ? (prev.tmin !== null ? Math.min(prev.tmin, tmin) : tmin) : prev.tmin,
     };
 
     if (score > prev.score) {
@@ -140,6 +146,8 @@ export function extractRainDataFromForecast(forecast) {
       date: new Date(dayKey + "T00:00:00"),
       rainMm: value.rainMm,
       main: value.main,
+      tmax: value.tmax,
+      tmin: value.tmin,
     }));
 
   const today = startOfToday();
@@ -149,10 +157,16 @@ export function extractRainDataFromForecast(forecast) {
     .slice(0, 3)
     .reduce((sum, d) => sum + (d.rainMm || 0), 0);
 
+  // tempNext5: days with complete temperature data, for forward ET₀ calculation.
+  const tempNext5 = next5Days
+    .filter((d) => d.tmax !== null && d.tmin !== null)
+    .map((d) => ({ date: d.date, tmax: d.tmax, tmin: d.tmin }));
+
   return {
     rainLast7: 0,
     rainNext3,
     dailyForecastNext5: next5Days,
+    tempNext5,
   };
 }
 

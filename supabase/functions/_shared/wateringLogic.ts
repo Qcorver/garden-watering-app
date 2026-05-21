@@ -152,6 +152,7 @@ const safeNum = (v: unknown): number => {
  * - dailyForecastNext5: [{ date, rainMm }] for the next ~5 days
  * - lastWateredDate: Date | null (optional, from user history)
  * - tempLast7: [{ date, tmax, tmin }] — if provided with latitude, drives ET₀-based weeklyTarget
+ * - tempNext5: [{ date, tmax, tmin }] — forecast temps; when hotter than last 7 days, raises weeklyTarget
  * - latitude: decimal degrees — required to use ET₀-based target
  */
 export function calculateWateringAdvice({
@@ -164,6 +165,7 @@ export function calculateWateringAdvice({
   dailyForecastNext5,
   lastWateredDate = null,
   tempLast7 = [],
+  tempNext5 = [],
   latitude = null,
   lang = "en",
   weeklyTargetMultiplier = 1.0,
@@ -180,6 +182,7 @@ export function calculateWateringAdvice({
   dailyForecastNext5: Array<{ date: Date | string | null; rainMm: number }>;
   lastWateredDate?: Date | null;
   tempLast7?: Array<{ date: Date; tmax: number; tmin: number }>;
+  tempNext5?: Array<{ date: Date; tmax: number; tmin: number }>;
   latitude?: number | null;
   lang?: Lang;
   weeklyTargetMultiplier?: number;
@@ -199,11 +202,17 @@ export function calculateWateringAdvice({
 
   const seasonFactor = getSeasonFactor();
   // Use ET₀-based target when temperature + latitude are available; fall back to season factor.
-  // Apply category multiplier on top of the base target.
-  const baseWeeklyTarget =
+  // Also compute a forward ET₀ target from forecast temps — if a hot dry week is coming,
+  // use whichever is higher so plants aren't under-watered after a cool wet period.
+  const backwardTarget =
     tempLast7 && tempLast7.length > 0 && latitude !== null
       ? computeWeeklyTarget(tempLast7, latitude)
       : WEEKLY_TARGET * seasonFactor;
+  const forwardTarget =
+    tempNext5 && tempNext5.length > 0 && latitude !== null
+      ? computeWeeklyTarget(tempNext5, latitude)
+      : 0;
+  const baseWeeklyTarget = Math.max(backwardTarget, forwardTarget);
   const weeklyTarget = baseWeeklyTarget * weeklyTargetMultiplier * soilMultiplier * sensitivityFactor;
 
   // Derive effective season factor from the actual weekly target so wet-soil gates work

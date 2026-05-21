@@ -55,6 +55,7 @@ export function useWeatherAdvice(locationName, lastWateredDate, { soilMultiplier
         const {
           rainNext3,
           dailyForecastNext5: dailyForecastNext5FromApi,
+          tempNext5,
         } = extractRainDataFromForecast(forecast);
 
         setDailyForecastNext5(dailyForecastNext5FromApi || []);
@@ -68,6 +69,7 @@ export function useWeatherAdvice(locationName, lastWateredDate, { soilMultiplier
           rainNext3,
           dailyForecastNext5: dailyForecastNext5FromApi,
           tempLast7,
+          tempNext5,
           latitude: lat,
         };
         weatherInputsRef.current = inputs;

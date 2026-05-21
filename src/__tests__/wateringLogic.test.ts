@@ -432,4 +432,93 @@ describe("calculateWateringAdvice", () => {
       expect(result.bestWateringDate).toBeNull();
     });
   });
+
+  describe("forward ET₀ (tempNext5)", () => {
+    // Simulate Amstelveen scenario: cool/wet last week, hot/dry week ahead.
+    // Last 7 days: ~12–15 °C → low ET₀ → low backward target (~14 mm/week).
+    // With 32.3 mm rain last week the 80% gate fires on the backward target.
+    // Next 5 days: 14–26 °C → high ET₀ → forward target ~28 mm/week.
+    // For pots (multiplier 1.5, rainEfficiency 0.4): effective rain = 12.9 mm < 80% of 42 mm → should water.
+    const latitude = 52; // Amstelveen
+
+    function makeTempDays(
+      count: number,
+      tmax: number,
+      tmin: number,
+      startDaysFromNow = -7,
+    ): Array<{ date: Date; tmax: number; tmin: number }> {
+      return Array.from({ length: count }, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() + startDaysFromNow + i);
+        return { date: d, tmax, tmin };
+      });
+    }
+
+    it("raises weeklyTarget when forecast is hotter than recent history", () => {
+      const coolWeek = makeTempDays(7, 15, 8); // backward ET₀ ~2.5 mm/day → ~17 mm/week
+      const hotForecast = makeTempDays(5, 26, 14, 0); // forward ET₀ ~4.5 mm/day → ~32 mm/week
+
+      const backward = calculateWateringAdvice({
+        rainLast7: 32.3,
+        rainNext3: 0,
+        dailyForecastNext5: makeForecast([{ daysFromNow: 0, rainMm: 0 }]),
+        tempLast7: coolWeek,
+        latitude,
+      });
+      const forward = calculateWateringAdvice({
+        rainLast7: 32.3,
+        rainNext3: 0,
+        dailyForecastNext5: makeForecast([{ daysFromNow: 0, rainMm: 0 }]),
+        tempLast7: coolWeek,
+        tempNext5: hotForecast,
+        latitude,
+      });
+
+      // Forward target should be higher → weeklyTarget increases → 80% gate may no longer fire.
+      expect(forward.weeklyTarget).toBeGreaterThan(backward.weeklyTarget);
+    });
+
+    it("recommends watering pots after cool/wet week when hot dry week is forecast", () => {
+      const coolWeek = makeTempDays(7, 15, 8);
+      const hotForecast = makeTempDays(5, 26, 14, 0);
+
+      const result = calculateWateringAdvice({
+        rainLast7: 32.3,
+        rainNext3: 0,
+        dailyForecastNext5: makeForecast([
+          { daysFromNow: 0, rainMm: 0 },
+          { daysFromNow: 1, rainMm: 0 },
+        ]),
+        tempLast7: coolWeek,
+        tempNext5: hotForecast,
+        latitude,
+        weeklyTargetMultiplier: 1.5, // pots
+        rainEfficiency: 0.4,         // pots
+      });
+
+      expect(result.shouldWater).toBe(true);
+    });
+
+    it("does not change result when tempNext5 is empty", () => {
+      const coolWeek = makeTempDays(7, 15, 8);
+
+      const withoutForward = calculateWateringAdvice({
+        rainLast7: 0,
+        rainNext3: 0,
+        dailyForecastNext5: makeForecast([{ daysFromNow: 0, rainMm: 0 }]),
+        tempLast7: coolWeek,
+        latitude,
+      });
+      const withEmptyForward = calculateWateringAdvice({
+        rainLast7: 0,
+        rainNext3: 0,
+        dailyForecastNext5: makeForecast([{ daysFromNow: 0, rainMm: 0 }]),
+        tempLast7: coolWeek,
+        tempNext5: [],
+        latitude,
+      });
+
+      expect(withEmptyForward.weeklyTarget).toBe(withoutForward.weeklyTarget);
+    });
+  });
 });
