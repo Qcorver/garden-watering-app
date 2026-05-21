@@ -1,6 +1,6 @@
 // src/App.jsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { format, isAfter, parseISO } from "date-fns";
+import { format, isAfter, parseISO, addDays } from "date-fns";
 import { t } from "./i18n";
 
 import { BestDayToWaterScreen } from "./components/BestDayToWaterScreen";
@@ -256,6 +256,63 @@ export default function App() {
     return candidates.reduce((earliest, d) => (d < earliest ? d : earliest));
   }, [advice, weatherInputs, gardenPlants, lastWateredDate, soilMultiplier, sensitivityFactor]);
 
+  // Forward-simulate watering needs for upcoming forecast days.
+  // For each forecast day D, rebuild the 7-day rain window from historical + forecast data
+  // and run the algorithm with the actual lastWateredDate (no simulated watering).
+  const wateringScheduleDates = useMemo(() => {
+    if (!weatherInputs || !historicalDailyRain?.length || !dailyForecastNext5?.length) return new Set();
+
+    const rainMap = new Map();
+    historicalDailyRain.forEach(({ date, rainMm }) => {
+      rainMap.set(format(date instanceof Date ? date : new Date(date), "yyyy-MM-dd"), rainMm ?? 0);
+    });
+    dailyForecastNext5.forEach(({ date, rainMm }) => {
+      rainMap.set(format(date instanceof Date ? date : new Date(date), "yyyy-MM-dd"), rainMm ?? 0);
+    });
+
+    const getRain = (d) => rainMap.get(format(d, "yyyy-MM-dd")) ?? 0;
+
+    const schedule = new Set();
+
+    for (const fd of dailyForecastNext5) {
+      const D = fd.date instanceof Date ? fd.date : new Date(fd.date);
+      const last7 = Array.from({ length: 7 }, (_, i) => getRain(addDays(D, i - 7)));
+
+      const simInputs = {
+        ...weatherInputs,
+        rainLast7: last7.reduce((s, v) => s + v, 0),
+        rainLast2Days: last7[5] + last7[6],
+        rainLast3Days: last7[4] + last7[5] + last7[6],
+        rainLast5Days: last7[2] + last7[3] + last7[4] + last7[5] + last7[6],
+        maxDailyRainLast7: Math.max(...last7),
+        rainNext3: [0, 1, 2].map((i) => getRain(addDays(D, i))).reduce((s, v) => s + v, 0),
+        lastWateredDate,
+        soilMultiplier,
+        sensitivityFactor,
+      };
+
+      let needsWater = calculateWateringAdvice(simInputs).shouldWater;
+
+      if (!needsWater && gardenPlants.length > 0) {
+        const seenCats = new Set();
+        for (const plant of gardenPlants) {
+          const cat = plant.waterCategory ?? detectWaterCategory(plant);
+          if (!CATEGORIES[cat] || seenCats.has(cat)) continue;
+          seenCats.add(cat);
+          const { multiplier, rainEfficiency } = CATEGORIES[cat];
+          if (calculateWateringAdvice({ ...simInputs, weeklyTargetMultiplier: multiplier, rainEfficiency }).shouldWater) {
+            needsWater = true;
+            break;
+          }
+        }
+      }
+
+      if (needsWater) schedule.add(format(D, "yyyy-MM-dd"));
+    }
+
+    return schedule;
+  }, [weatherInputs, historicalDailyRain, dailyForecastNext5, gardenPlants, lastWateredDate, soilMultiplier, sensitivityFactor]);
+
   // Silently refresh pruning months from plant_species once after auth,
   // so corrections to the canonical data reach users without re-adding plants.
   useEffect(() => {
@@ -464,6 +521,7 @@ export default function App() {
         {activeTab === "calendar" && (
           <CalendarScreen
             effectiveBestWateringDate={effectiveBestWateringDate}
+            wateringScheduleDates={wateringScheduleDates}
             dailyForecastNext5={dailyForecastNext5}
             historicalDailyRain={historicalDailyRain}
             wateringHistory={wateringHistory}

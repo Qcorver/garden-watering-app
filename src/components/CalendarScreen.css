@@ -222,6 +222,11 @@
   box-shadow: 0 4px 16px rgba(61, 122, 61, 0.3);
 }
 
+/* Today + best day: white outline on green background */
+.cal-day--today.cal-day--best {
+  outline-color: white;
+}
+
 /* State: user watered */
 .cal-day--watered {
   background: linear-gradient(135deg, #1a6a8a, #2a9abf);
