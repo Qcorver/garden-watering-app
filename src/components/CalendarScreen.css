@@ -210,8 +210,10 @@
 
 /* State: today */
 .cal-day--today {
-  background: #1a3d1a;
-  box-shadow: 0 4px 16px rgba(26, 61, 26, 0.4);
+  outline: 2px solid #3d7a3d;
+  outline-offset: 1px;
+  position: relative;
+  z-index: 1;
 }
 
 /* State: best watering day */
@@ -245,7 +247,6 @@
   line-height: 1;
 }
 
-.cal-day--today .cal-day-num,
 .cal-day--best .cal-day-num,
 .cal-day--watered .cal-day-num {
   color: #ffffff;
@@ -287,7 +288,9 @@
 }
 
 .cal-legend-dot--today {
-  background: #1a3d1a;
+  background: transparent;
+  outline: 2px solid #3d7a3d;
+  outline-offset: 1px;
 }
 
 .cal-legend-dot--best {

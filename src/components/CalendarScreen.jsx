@@ -245,12 +245,12 @@ export function CalendarScreen({
               ? getHistoricalEmoji(historicalByDate[iso])
               : getWeatherEmoji(weatherByDate[iso]);
 
-            // Cell class priority: watered > today > best > no-data > other-month > normal
+            // today = outline only; best = filled; both can combine when today is also the best day
             const cellClass = [
               "cal-day",
               watered && "cal-day--watered",
               !watered && todayDay && "cal-day--today",
-              !watered && !todayDay && recommended && "cal-day--best",
+              !watered && recommended && "cal-day--best",
               noData && !watered && "cal-day--no-data",
               !inCurrentMonth && "cal-day--other-month",
             ]
