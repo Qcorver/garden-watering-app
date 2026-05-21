@@ -141,6 +141,24 @@ export function BestDayToWaterScreen({
     );
   }, [weatherInputs, activeCategoryKeys, hasPlants, lastWateredDate, soilMultiplier, sensitivityFactor, lang]);
 
+  // Sort categories: those needing water first (by earliest bestWateringDate), then the rest.
+  const sortedCategoryKeys = useMemo(() => {
+    if (!categoryAdvice || Object.keys(categoryAdvice).length === 0) return activeCategoryKeys;
+    return [...activeCategoryKeys].sort((a, b) => {
+      const ca = categoryAdvice[a];
+      const cb = categoryAdvice[b];
+      const aw = ca?.shouldWater ? 1 : 0;
+      const bw = cb?.shouldWater ? 1 : 0;
+      if (bw !== aw) return bw - aw; // water needed → top
+      if (aw && bw) {
+        const da = ca.bestWateringDate ? new Date(ca.bestWateringDate) : Infinity;
+        const db = cb.bestWateringDate ? new Date(cb.bestWateringDate) : Infinity;
+        return da - db; // earlier date → higher up
+      }
+      return CATEGORY_ORDER.indexOf(a) - CATEGORY_ORDER.indexOf(b);
+    });
+  }, [activeCategoryKeys, categoryAdvice]);
+
   const [categoryPopupKey, setCategoryPopupKey] = useState(null);
   const [infoSheet, setInfoSheet] = useState(null); // "rainfall" | "rec" | null
 
@@ -306,7 +324,7 @@ export function BestDayToWaterScreen({
             {/* Recommendation — per-category cards when plants are added, single card otherwise */}
             {hasPlants ? (
               <div className="best-cat-list">
-                {activeCategoryKeys.map((key) => {
+                {sortedCategoryKeys.map((key) => {
                   const ca = categoryAdvice[key];
                   if (!ca) return null;
                   const watering = ca.shouldWater;
