@@ -12,7 +12,7 @@ export function getDateLocale(lang) {
 export const strings = {
   en: {
     // Tab bar
-    tabBestDay: "Best Day",
+    tabBestDay: "Watering",
     tabCalendar: "Calendar",
     tabPruning: "Pruning",
     tabHerbs: "Herbs & Veggies",
@@ -197,7 +197,7 @@ export const strings = {
 
   nl: {
     // Tab bar
-    tabBestDay: "Beste Dag",
+    tabBestDay: "Sproeien",
     tabCalendar: "Kalender",
     tabPruning: "Snoeien",
     tabHerbs: "Moestuin",
