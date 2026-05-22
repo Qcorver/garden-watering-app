@@ -232,6 +232,15 @@ export default function App() {
     }
 
     if (weatherInputs && gardenPlants.length > 0) {
+      const todayWatered = !!wateringHistory[format(new Date(), "yyyy-MM-dd")];
+      const forecastForAdvice = todayWatered
+        ? (weatherInputs.dailyForecastNext5 ?? []).filter((d) => {
+            const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+            const dd = new Date(d.date); dd.setHours(0, 0, 0, 0);
+            return dd > d0;
+          })
+        : weatherInputs.dailyForecastNext5;
+
       const seenCategories = new Set();
       for (const plant of gardenPlants) {
         const cat = plant.waterCategory ?? detectWaterCategory(plant);
@@ -240,9 +249,9 @@ export default function App() {
         const { multiplier, rainEfficiency } = CATEGORIES[cat];
         const ca = calculateWateringAdvice({
           ...weatherInputs,
+          dailyForecastNext5: forecastForAdvice,
           weeklyTargetMultiplier: multiplier,
           rainEfficiency,
-          lastWateredDate,
           soilMultiplier,
           sensitivityFactor,
         });
@@ -254,7 +263,7 @@ export default function App() {
 
     if (candidates.length === 0) return null;
     return candidates.reduce((earliest, d) => (d < earliest ? d : earliest));
-  }, [advice, weatherInputs, gardenPlants, lastWateredDate, soilMultiplier, sensitivityFactor]);
+  }, [advice, weatherInputs, gardenPlants, wateringHistory, soilMultiplier, sensitivityFactor]);
 
   // Forward-simulate watering needs for upcoming forecast days.
   // For each forecast day D, rebuild the 7-day rain window from historical + forecast data
@@ -478,7 +487,6 @@ export default function App() {
             advice={advice}
             weatherInputs={weatherInputs}
             gardenPlants={gardenPlants}
-            lastWateredDate={lastWateredDate}
             wateringHistory={wateringHistory}
             onToggleWateredDay={handleToggleWateredDay}
             dailyForecastNext5={dailyForecastNext5}

@@ -88,7 +88,6 @@ export function BestDayToWaterScreen({
   advice,
   weatherInputs = null,
   gardenPlants = [],
-  lastWateredDate = null,
   wateringHistory = {},
   onToggleWateredDay,
   dailyForecastNext5 = [],
@@ -122,24 +121,33 @@ export function BestDayToWaterScreen({
 
   const hasPlants = activeCategoryKeys.length > 0;
 
+  // Compute today-watered early so categoryAdvice can use it.
+  const todayKeyEarly = format(new Date(), "yyyy-MM-dd");
+  const todayWateredEarly = !!wateringHistory[todayKeyEarly];
+
   // Compute per-category advice from shared weather inputs.
   const categoryAdvice = useMemo(() => {
     if (!weatherInputs || !hasPlants) return {};
+    // When already watered today, drop today from the forecast so bestWateringDate
+    // advances to the next day instead of staying on "Vandaag".
+    const forecastForAdvice = todayWateredEarly
+      ? (weatherInputs.dailyForecastNext5 ?? []).filter((d) => !isToday(new Date(d.date)))
+      : weatherInputs.dailyForecastNext5;
     return Object.fromEntries(
       activeCategoryKeys.map((key) => {
         const { multiplier, rainEfficiency } = CATEGORIES[key];
         return [key, calculateWateringAdvice({
           ...weatherInputs,
+          dailyForecastNext5: forecastForAdvice,
           weeklyTargetMultiplier: multiplier,
           rainEfficiency,
-          lastWateredDate,
           soilMultiplier,
           sensitivityFactor,
           lang,
         })];
       })
     );
-  }, [weatherInputs, activeCategoryKeys, hasPlants, lastWateredDate, soilMultiplier, sensitivityFactor, lang]);
+  }, [weatherInputs, activeCategoryKeys, hasPlants, todayWateredEarly, soilMultiplier, sensitivityFactor, lang]);
 
   // Sort categories: those needing water first (by earliest bestWateringDate), then the rest.
   const sortedCategoryKeys = useMemo(() => {
@@ -171,9 +179,8 @@ export function BestDayToWaterScreen({
   const heroWeekday = format(heroDateRaw, "EEEE", { locale: dateLocale });
 
   // Today's / yesterday's watered state (for interactive badge)
-  const todayKey = format(new Date(), "yyyy-MM-dd");
   const yesterdayKey = format(subDays(new Date(), 1), "yyyy-MM-dd");
-  const todayWatered = !!wateringHistory[todayKey];
+  const todayWatered = todayWateredEarly;
   const yesterdayWatered = !!wateringHistory[yesterdayKey];
 
   // When per-category advice is available, any category needing water should

@@ -249,11 +249,11 @@ export function CalendarScreen({
               ? getHistoricalEmoji(historicalByDate[iso])
               : getWeatherEmoji(weatherByDate[iso]);
 
-            // today = outline only; best = filled; both can combine when today is also the best day
+            // today = outline; best = filled green; watered = filled blue; classes can combine
             const cellClass = [
               "cal-day",
               watered && "cal-day--watered",
-              !watered && todayDay && "cal-day--today",
+              todayDay && "cal-day--today",
               !watered && recommended && "cal-day--best",
               noData && !watered && "cal-day--no-data",
               !inCurrentMonth && "cal-day--other-month",
