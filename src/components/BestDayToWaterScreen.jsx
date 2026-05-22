@@ -338,6 +338,7 @@ export function BestDayToWaterScreen({
                   const dateRaw = watering && ca.bestWateringDate
                     ? (ca.bestWateringDate instanceof Date ? ca.bestWateringDate : new Date(ca.bestWateringDate))
                     : null;
+                  const wateringToday = watering && dateRaw && isToday(dateRaw);
                   const dayLabel = dateRaw
                     ? isToday(dateRaw) ? t(lang, "badgeWaterToday")
                       : isTomorrow(dateRaw) ? t(lang, "badgeWaterTomorrow")
@@ -347,7 +348,7 @@ export function BestDayToWaterScreen({
                     <div
                       key={key}
                       role="button"
-                      className={`best-cat-card${watering ? " best-cat-card--water" : ""}`}
+                      className={`best-cat-card${wateringToday ? " best-cat-card--water" : ""}`}
                       onClick={() => setCategoryPopupKey(key)}
                     >
                       <div className="best-cat-name">
