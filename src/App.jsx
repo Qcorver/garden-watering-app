@@ -302,7 +302,7 @@ export default function App() {
         maxDailyRainLast7: Math.max(...last7),
         rainNext3: [0, 1, 2].map((i) => getRain(addDays(D, i))).reduce((s, v) => s + v, 0),
         wateringDaysLast7: wateringDaysForD,
-        lastWateredDate,
+        lastWateredDate: null,
         soilMultiplier,
         sensitivityFactor,
       };
@@ -327,7 +327,7 @@ export default function App() {
     }
 
     return schedule;
-  }, [weatherInputs, historicalDailyRain, dailyForecastNext5, gardenPlants, wateringHistory, lastWateredDate, soilMultiplier, sensitivityFactor]);
+  }, [weatherInputs, historicalDailyRain, dailyForecastNext5, gardenPlants, wateringHistory, soilMultiplier, sensitivityFactor]);
 
   // Silently refresh pruning months from plant_species once after auth,
   // so corrections to the canonical data reach users without re-adding plants.
