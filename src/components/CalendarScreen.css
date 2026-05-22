@@ -210,15 +210,15 @@
 
 /* State: today */
 .cal-day--today {
-  outline: 2px solid #1b3022;
+  outline: 2.5px solid #2d6a2d;
   outline-offset: 1px;
   position: relative;
   z-index: 1;
 }
 
-/* Today + watered: dark green ring on blue background */
+/* Today + watered: dark green ring on dark green background */
 .cal-day--watered.cal-day--today {
-  outline-color: #1b3022;
+  outline-color: #2d6a2d;
 }
 
 /* State: best watering day — lighter green so today's dark ring stands out */
@@ -234,8 +234,8 @@
 
 /* State: user watered */
 .cal-day--watered {
-  background: linear-gradient(135deg, #1a6a8a, #2a9abf);
-  box-shadow: 0 4px 16px rgba(26, 106, 138, 0.3);
+  background: linear-gradient(135deg, #1a4d1a, #2d6a2d);
+  box-shadow: 0 4px 16px rgba(26, 77, 26, 0.3);
 }
 
 /* State: other month */
@@ -299,7 +299,7 @@
 
 .cal-legend-dot--today {
   background: transparent;
-  outline: 2px solid #1b3022;
+  outline: 2.5px solid #2d6a2d;
   outline-offset: 1px;
 }
 
@@ -308,7 +308,7 @@
 }
 
 .cal-legend-dot--watered {
-  background: linear-gradient(135deg, #1a6a8a, #2a9abf);
+  background: linear-gradient(135deg, #1a4d1a, #2d6a2d);
 }
 
 .cal-legend-label {

@@ -287,6 +287,12 @@ export default function App() {
       const D = fd.date instanceof Date ? fd.date : new Date(fd.date);
       const last7 = Array.from({ length: 7 }, (_, i) => getRain(addDays(D, i - 7)));
 
+      // Count watered days within the 7-day window before D from actual history.
+      const wateringDaysForD = Array.from({ length: 7 }, (_, i) => {
+        const key = format(addDays(D, i - 7), "yyyy-MM-dd");
+        return wateringHistory[key] ? 1 : 0;
+      }).reduce((s, v) => s + v, 0);
+
       const simInputs = {
         ...weatherInputs,
         rainLast7: last7.reduce((s, v) => s + v, 0),
@@ -295,6 +301,7 @@ export default function App() {
         rainLast5Days: last7[2] + last7[3] + last7[4] + last7[5] + last7[6],
         maxDailyRainLast7: Math.max(...last7),
         rainNext3: [0, 1, 2].map((i) => getRain(addDays(D, i))).reduce((s, v) => s + v, 0),
+        wateringDaysLast7: wateringDaysForD,
         lastWateredDate,
         soilMultiplier,
         sensitivityFactor,
@@ -320,7 +327,7 @@ export default function App() {
     }
 
     return schedule;
-  }, [weatherInputs, historicalDailyRain, dailyForecastNext5, gardenPlants, lastWateredDate, soilMultiplier, sensitivityFactor]);
+  }, [weatherInputs, historicalDailyRain, dailyForecastNext5, gardenPlants, wateringHistory, lastWateredDate, soilMultiplier, sensitivityFactor]);
 
   // Silently refresh pruning months from plant_species once after auth,
   // so corrections to the canonical data reach users without re-adding plants.
