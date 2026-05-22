@@ -747,15 +747,18 @@ export function AddPlantPopup({ initialPlant, onSave, onClose, lang, isSH = fals
                   className="pruning-search-result-item"
                   onClick={() => handleSelectResult(item)}
                 >
-                  <div className="pruning-result-row">
-                    <span className="pruning-result-name">{item.common_name}</span>
-                    {showBadge && <span className="pruning-result-popular">{t(lang, "pruneMostCommon")}</span>}
+                  <PlantThumbnail imageUrl={item.default_image?.thumbnail ?? item.image_url} commonName={item.common_name} />
+                  <div className="pruning-result-text">
+                    <div className="pruning-result-row">
+                      <span className="pruning-result-name">{item.common_name}</span>
+                      {showBadge && <span className="pruning-result-popular">{t(lang, "pruneMostCommon")}</span>}
+                    </div>
+                    <span className="pruning-result-sci">
+                      {Array.isArray(item.scientific_name)
+                        ? item.scientific_name[0]
+                        : item.scientific_name}
+                    </span>
                   </div>
-                  <span className="pruning-result-sci">
-                    {Array.isArray(item.scientific_name)
-                      ? item.scientific_name[0]
-                      : item.scientific_name}
-                  </span>
                 </button>
                   );
                 });
