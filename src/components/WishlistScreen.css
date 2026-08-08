@@ -1,0 +1,72 @@
+/* ── Planting legend ── */
+.wishlist-legend {
+  display: flex;
+  gap: 16px;
+  padding: 0 4px 14px;
+  justify-content: flex-end;
+}
+
+.wishlist-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #9aab94;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.wishlist-legend-swatch {
+  width: 18px;
+  height: 10px;
+  border-radius: 3px;
+  background: #fcd9b0;
+  flex-shrink: 0;
+}
+
+.wishlist-legend-swatch--active {
+  background: #a8e6a0;
+}
+
+.wishlist-legend-swatch--current {
+  background: transparent;
+  outline: 2px solid #3d7a3d;
+  outline-offset: 1px;
+}
+
+/* ── "Geplant?" button & mini-form ── */
+.wishlist-planted-btn {
+  display: block;
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px 16px;
+  background: #3d7a3d;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+.wishlist-planted-form {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wishlist-planted-confirm-btn {
+  margin-top: 4px;
+  padding: 14px 16px;
+  background: #3d7a3d;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}

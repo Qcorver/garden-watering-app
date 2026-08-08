@@ -1,9 +1,10 @@
 import React, { useRef, useState, useCallback } from "react";
 import { PlantIllustration } from "./PlantIllustration";
 import { t } from "../i18n";
+
 import "./OnboardingCarousel.css";
 
-const TOTAL_SLIDES = 5;
+const TOTAL_SLIDES = 6;
 
 export function OnboardingCarousel({ onComplete, onRequestPush, onRequestLocation, lang = "en" }) {
   const trackRef = useRef(null);
@@ -29,6 +30,21 @@ export function OnboardingCarousel({ onComplete, onRequestPush, onRequestLocatio
 
   const isLast = currentSlide === TOTAL_SLIDES - 1;
 
+  const badges = [
+    { color: "#f87171", text: t(lang, "wateredTodayQuestion") },
+    { color: "#fb923c", text: t(lang, "badgeWaterTomorrow") },
+    { color: "#60a5fa", text: t(lang, "badgeRainExpected") },
+    { color: "#34d399", text: t(lang, "badgeWellWatered") },
+    { color: "#34d399", text: t(lang, "wateredToday") },
+  ];
+
+  const gardenTiles = [
+    [<img key="shears" src="/hedgetrimmer3.png" alt="" width="36" height="36" style={{ objectFit: "contain" }} />, lang === "nl" ? "Snoeien" : "Pruning", false],
+    ["🌱", "Wishlist", false],
+    ["🥕", lang === "nl" ? "Moestuin" : "Vegetables", true],
+    ["💬", lang === "nl" ? "AI Assistent" : "AI Assistant", true],
+  ];
+
   return (
     <div className="onboarding">
       {!isLast && (
@@ -50,35 +66,18 @@ export function OnboardingCarousel({ onComplete, onRequestPush, onRequestLocatio
           </div>
         </div>
 
-        {/* Slide 2: Plant categories */}
+        {/* Slide 2: Badge states */}
         <div className="onboarding-slide">
-          <div className="onboarding-visual onboarding-visual--cats">
-            <div className="onboarding-cat-row">
-              {[["🌸", "Border"], ["🌵", lang === "nl" ? "Droogte" : "Drought"]].map(([icon, label]) => (
-                <div key={icon} className="onboarding-cat-card">
-                  <span className="onboarding-cat-emoji">{icon}</span>
-                  <span className="onboarding-cat-label">{label}</span>
-                </div>
-              ))}
-            </div>
-            <div className="onboarding-cat-row">
-              {[["🌳", lang === "nl" ? "Bomen" : "Trees"], ["🪴", lang === "nl" ? "Potten" : "Pots"]].map(([icon, label]) => (
-                <div key={icon} className="onboarding-cat-card">
-                  <span className="onboarding-cat-emoji">{icon}</span>
-                  <span className="onboarding-cat-label">{label}</span>
-                </div>
-              ))}
-            </div>
+          <div className="onboarding-visual onboarding-visual--badges">
+            {badges.map(({ color, text }, i) => (
+              <div key={i} className="onboarding-badge-item">
+                <span className="onboarding-badge-dot" style={{ background: color }} />
+                <span>{text}</span>
+              </div>
+            ))}
           </div>
           <div className="onboarding-text">
-            <h2 className="onboarding-title">
-              {t(lang, "onboarding2Title").split("{PRUNE}").map((part, i) =>
-                i === 0 ? part : [
-                  <img key="prune-icon" src="/hedgetrimmer3.png" alt="Pruning" width="20" height="20" style={{ objectFit: "contain", verticalAlign: "middle", display: "inline-block" }} />,
-                  part
-                ]
-              )}
-            </h2>
+            <h2 className="onboarding-title">{t(lang, "onboarding2Title")}</h2>
             <p className="onboarding-sub">{t(lang, "onboarding2Sub")}</p>
           </div>
         </div>
@@ -114,7 +113,33 @@ export function OnboardingCarousel({ onComplete, onRequestPush, onRequestLocatio
           </div>
         </div>
 
-        {/* Slide 4: Location */}
+        {/* Slide 4: Mijn tuin */}
+        <div className="onboarding-slide">
+          <div className="onboarding-visual onboarding-visual--cats">
+            <div className="onboarding-cat-row">
+              {gardenTiles.slice(0, 2).map(([icon, label, dim]) => (
+                <div key={label} className={`onboarding-cat-card${dim ? " onboarding-cat-card--dim" : ""}`}>
+                  <span className="onboarding-cat-emoji">{icon}</span>
+                  <span className="onboarding-cat-label">{label}</span>
+                </div>
+              ))}
+            </div>
+            <div className="onboarding-cat-row">
+              {gardenTiles.slice(2).map(([icon, label, dim]) => (
+                <div key={label} className={`onboarding-cat-card${dim ? " onboarding-cat-card--dim" : ""}`}>
+                  <span className="onboarding-cat-emoji">{icon}</span>
+                  <span className="onboarding-cat-label">{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="onboarding-text">
+            <h2 className="onboarding-title">{t(lang, "onboardingGardenTitle")}</h2>
+            <p className="onboarding-sub">{t(lang, "onboardingGardenSub")}</p>
+          </div>
+        </div>
+
+        {/* Slide 5: Location */}
         <div className="onboarding-slide">
           <div className="onboarding-visual onboarding-visual--bell">
             <span className="onboarding-bell-emoji">📍</span>
@@ -124,16 +149,16 @@ export function OnboardingCarousel({ onComplete, onRequestPush, onRequestLocatio
             <p className="onboarding-sub">{t(lang, "onboardingLocSub")}</p>
           </div>
           <div className="onboarding-push-actions">
-            <button type="button" className="onboarding-allow-btn" onClick={() => { onRequestLocation?.(); goTo(4); }}>
+            <button type="button" className="onboarding-allow-btn" onClick={() => { onRequestLocation?.(); goTo(5); }}>
               {t(lang, "onboardingShareLocation")}
             </button>
-            <button type="button" className="onboarding-skip-inline" onClick={() => goTo(4)}>
+            <button type="button" className="onboarding-skip-inline" onClick={() => goTo(5)}>
               {t(lang, "onboardingSkipNow")}
             </button>
           </div>
         </div>
 
-        {/* Slide 5: Push notifications */}
+        {/* Slide 6: Push notifications */}
         <div className="onboarding-slide onboarding-slide--last">
           <div className="onboarding-visual onboarding-visual--bell">
             <span className="onboarding-bell-emoji">🔔</span>

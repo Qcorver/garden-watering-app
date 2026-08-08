@@ -7,13 +7,14 @@ import {
 } from "../api/openWeatherClient";
 import { fetchRainHistory, fetchDailyRainHistory } from "../api/openMeteoClient";
 
-export function useWeatherAdvice(locationName, lastWateredDate, { soilMultiplier = 1.0, sensitivityFactor = 1.0 } = {}) {
+export function useWeatherAdvice(locationName, lastWateredDate, { soilMultiplier = 1.0, sensitivityFactor = 1.0, wateringDaysLast7 = 0 } = {}) {
   const [advice, setAdvice] = useState(null);
   const [weatherInputs, setWeatherInputs] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const [dailyForecastNext5, setDailyForecastNext5] = useState([]);
+  const [currentWeatherMain, setCurrentWeatherMain] = useState(null);
   const [historicalDailyRain, setHistoricalDailyRain] = useState([]);
   const [retryCount, setRetryCount] = useState(0);
 
@@ -23,6 +24,8 @@ export function useWeatherAdvice(locationName, lastWateredDate, { soilMultiplier
   // without re-triggering the fetch effect.
   const lastWateredDateRef = useRef(lastWateredDate);
   lastWateredDateRef.current = lastWateredDate;
+  const wateringDaysLast7Ref = useRef(wateringDaysLast7);
+  wateringDaysLast7Ref.current = wateringDaysLast7;
 
   // Cached weather inputs — needed to recalculate advice when lastWateredDate changes.
   const weatherInputsRef = useRef(null);
@@ -56,9 +59,11 @@ export function useWeatherAdvice(locationName, lastWateredDate, { soilMultiplier
           rainNext3,
           dailyForecastNext5: dailyForecastNext5FromApi,
           tempNext5,
+          currentWeatherMain,
         } = extractRainDataFromForecast(forecast);
 
         setDailyForecastNext5(dailyForecastNext5FromApi || []);
+        setCurrentWeatherMain(currentWeatherMain || null);
 
         const inputs = {
           rainLast7: rainLast7Total,
@@ -75,7 +80,7 @@ export function useWeatherAdvice(locationName, lastWateredDate, { soilMultiplier
         weatherInputsRef.current = inputs;
         setWeatherInputs(inputs);
 
-        setAdvice(calculateWateringAdvice({ ...inputs, lastWateredDate: lastWateredDateRef.current, soilMultiplier, sensitivityFactor }));
+        setAdvice(calculateWateringAdvice({ ...inputs, lastWateredDate: lastWateredDateRef.current, soilMultiplier, sensitivityFactor, wateringDaysLast7: wateringDaysLast7Ref.current }));
       } catch (err) {
         if (err.name === "AbortError") return;
         console.error(err);
@@ -92,11 +97,12 @@ export function useWeatherAdvice(locationName, lastWateredDate, { soilMultiplier
     return () => { controller.abort(); };
   }, [locationName, retryCount]);
 
-  // Recalculate advice without re-fetching when lastWateredDate, soil, or sensitivity changes.
+  // Recalculate advice without re-fetching when lastWateredDate, watering count,
+  // soil, or sensitivity changes.
   useEffect(() => {
     if (!weatherInputsRef.current) return;
-    setAdvice(calculateWateringAdvice({ ...weatherInputsRef.current, lastWateredDate, soilMultiplier, sensitivityFactor }));
-  }, [lastWateredDate, soilMultiplier, sensitivityFactor]);
+    setAdvice(calculateWateringAdvice({ ...weatherInputsRef.current, lastWateredDate, soilMultiplier, sensitivityFactor, wateringDaysLast7 }));
+  }, [lastWateredDate, soilMultiplier, sensitivityFactor, wateringDaysLast7]);
 
-  return { advice, weatherInputs, isLoading, error, retry, dailyForecastNext5, historicalDailyRain };
+  return { advice, weatherInputs, isLoading, error, retry, dailyForecastNext5, currentWeatherMain, historicalDailyRain };
 }

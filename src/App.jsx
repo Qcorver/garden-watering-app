@@ -5,8 +5,9 @@ import { t } from "./i18n";
 
 import { BestDayToWaterScreen } from "./components/BestDayToWaterScreen";
 import { CalendarScreen } from "./components/CalendarScreen";
-import { PruningScreen, detectWaterCategory } from "./components/PruningScreen";
-import { CATEGORIES, calculateWateringAdvice } from "@shared/wateringLogic";
+import { detectWaterCategory } from "./components/PruningScreen";
+import { MijnTuinScreen } from "./components/MijnTuinScreen";
+import { CATEGORIES, calculateWateringAdvice, getCategoryAdviceParams } from "@shared/wateringLogic";
 import { SettingsScreen, getSoilMultiplier } from "./components/SettingsScreen";
 import { OnboardingCarousel } from "./components/OnboardingCarousel";
 
@@ -52,7 +53,7 @@ async function refreshPruningMonthsFromDB(plants, onUpdated) {
 
   const { data, error } = await supabase
     .from("plant_species")
-    .select("id, pruning_months, description, image_url")
+    .select("id, pruning_months, description, image_url, maintenance, cycle")
     .in("id", ids);
 
   if (error || !data?.length) return;
@@ -66,14 +67,22 @@ async function refreshPruningMonthsFromDB(plants, onUpdated) {
       JSON.stringify(p.pruningMonths ?? []) !== JSON.stringify(fresh.pruning_months ?? []);
     const descChanged = fresh.description && fresh.description !== p.description;
     const imageChanged = fresh.image_url && fresh.image_url !== p.imageUrl;
-    if (!monthsChanged && !descChanged && !imageChanged) return p;
+    const maintenanceChanged = fresh.maintenance && fresh.maintenance !== p.maintenance;
+    const cycleChanged = fresh.cycle && fresh.cycle !== p.cycle;
+    if (!monthsChanged && !descChanged && !imageChanged && !maintenanceChanged && !cycleChanged) return p;
     changed = true;
-    return {
+    const patched = {
       ...p,
-      ...(monthsChanged ? { pruningMonths: fresh.pruning_months } : {}),
-      ...(descChanged   ? { description:   fresh.description }   : {}),
-      ...(imageChanged  ? { imageUrl:      fresh.image_url }     : {}),
+      ...(monthsChanged     ? { pruningMonths: fresh.pruning_months } : {}),
+      ...(descChanged       ? { description:   fresh.description }    : {}),
+      ...(imageChanged      ? { imageUrl:      fresh.image_url }      : {}),
+      ...(maintenanceChanged ? { maintenance:  fresh.maintenance }    : {}),
+      ...(cycleChanged      ? { cycle:         fresh.cycle }          : {}),
     };
+    if (maintenanceChanged || cycleChanged) {
+      patched.waterCategory = detectWaterCategory(patched);
+    }
+    return patched;
   });
 
   if (changed) {
@@ -83,10 +92,24 @@ async function refreshPruningMonthsFromDB(plants, onUpdated) {
 }
 
 // --- Helpers for watering history ---
+// Entries older than this are dropped on load so localStorage doesn't grow
+// unbounded. The algorithm only looks back 7 days; the calendar 1 month.
+const HISTORY_RETENTION_DAYS = 90;
+
+function historyRetentionCutoff() {
+  return format(addDays(new Date(), -HISTORY_RETENTION_DAYS), "yyyy-MM-dd");
+}
+
 function loadWateringHistory() {
   try {
     const raw = localStorage.getItem("wateringHistory");
-    return raw ? JSON.parse(raw) : {};
+    const parsed = raw ? JSON.parse(raw) : {};
+    const cutoff = historyRetentionCutoff();
+    const pruned = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (key >= cutoff) pruned[key] = value;
+    }
+    return pruned;
   } catch {
     return {};
   }
@@ -112,6 +135,19 @@ function getLastWateredDateFromHistory(wateringHistory) {
     }
   }
   return latest;
+}
+
+// Count watering days in the 7 days before refDate (exclusive). Matches the
+// rainLast7 window, which also excludes the reference day itself; watering on
+// the reference day is handled by the cooldown gate instead.
+function countWateringDaysLast7(wateredKeys, refDate = new Date()) {
+  const from = format(addDays(refDate, -7), "yyyy-MM-dd");
+  const to = format(refDate, "yyyy-MM-dd");
+  let count = 0;
+  for (const key of wateredKeys) {
+    if (key >= from && key < to) count++;
+  }
+  return count;
 }
 
 async function syncWateringSession(userId, key, active) {
@@ -194,6 +230,16 @@ export default function App() {
     [wateringHistory]
   );
 
+  const wateredDayKeys = useMemo(
+    () => Object.keys(wateringHistory).filter((d) => wateringHistory[d]),
+    [wateringHistory]
+  );
+
+  const wateringDaysLast7 = useMemo(
+    () => countWateringDaysLast7(wateredDayKeys),
+    [wateredDayKeys]
+  );
+
   // --- Location (persisted to localStorage) ---
   const [locationName, setLocationName] = useState(() => {
     return localStorage.getItem("selectedLocation") || "";
@@ -219,55 +265,13 @@ export default function App() {
   // --- Hooks ---
   const { userId, ensureAuthUserId } = useAuth();
   const { pushEnabled, pushLoading, handleTogglePush } = usePushNotifications(userId, ensureAuthUserId);
-  const { advice, weatherInputs, isLoading, error, retry, dailyForecastNext5, historicalDailyRain } = useWeatherAdvice(
-    locationName, lastWateredDate, { soilMultiplier, sensitivityFactor }
+  const { advice, weatherInputs, isLoading, error, retry, dailyForecastNext5, currentWeatherMain, historicalDailyRain } = useWeatherAdvice(
+    locationName, lastWateredDate, { soilMultiplier, sensitivityFactor, wateringDaysLast7 }
   );
-
-  // Earliest date where any category (or main advice) needs watering → "Beste dag" on calendar.
-  const effectiveBestWateringDate = useMemo(() => {
-    const candidates = [];
-
-    if (advice?.shouldWater && advice?.bestWateringDate) {
-      candidates.push(new Date(advice.bestWateringDate));
-    }
-
-    if (weatherInputs && gardenPlants.length > 0) {
-      const todayWatered = !!wateringHistory[format(new Date(), "yyyy-MM-dd")];
-      const forecastForAdvice = todayWatered
-        ? (weatherInputs.dailyForecastNext5 ?? []).filter((d) => {
-            const d0 = new Date(); d0.setHours(0, 0, 0, 0);
-            const dd = new Date(d.date); dd.setHours(0, 0, 0, 0);
-            return dd > d0;
-          })
-        : weatherInputs.dailyForecastNext5;
-
-      const seenCategories = new Set();
-      for (const plant of gardenPlants) {
-        const cat = plant.waterCategory ?? detectWaterCategory(plant);
-        if (!CATEGORIES[cat] || seenCategories.has(cat)) continue;
-        seenCategories.add(cat);
-        const { multiplier, rainEfficiency } = CATEGORIES[cat];
-        const ca = calculateWateringAdvice({
-          ...weatherInputs,
-          dailyForecastNext5: forecastForAdvice,
-          weeklyTargetMultiplier: multiplier,
-          rainEfficiency,
-          soilMultiplier,
-          sensitivityFactor,
-        });
-        if (ca.shouldWater && ca.bestWateringDate) {
-          candidates.push(new Date(ca.bestWateringDate));
-        }
-      }
-    }
-
-    if (candidates.length === 0) return null;
-    return candidates.reduce((earliest, d) => (d < earliest ? d : earliest));
-  }, [advice, weatherInputs, gardenPlants, wateringHistory, soilMultiplier, sensitivityFactor]);
 
   // Forward-simulate watering needs for upcoming forecast days.
   // For each forecast day D, rebuild the 7-day rain window from historical + forecast data
-  // and run the algorithm with the actual lastWateredDate (no simulated watering).
+  // and run the algorithm. lastWateredDate cascades: if day N is recommended, day N+1 knows.
   const wateringScheduleDates = useMemo(() => {
     if (!weatherInputs || !historicalDailyRain?.length || !dailyForecastNext5?.length) return new Set();
 
@@ -275,24 +279,33 @@ export default function App() {
     historicalDailyRain.forEach(({ date, rainMm }) => {
       rainMap.set(format(date instanceof Date ? date : new Date(date), "yyyy-MM-dd"), rainMm ?? 0);
     });
-    dailyForecastNext5.forEach(({ date, rainMm }) => {
-      rainMap.set(format(date instanceof Date ? date : new Date(date), "yyyy-MM-dd"), rainMm ?? 0);
+    // Forecast days use probability-weighted rain so uncertain showers don't
+    // suppress future watering days the way certain rain would.
+    dailyForecastNext5.forEach(({ date, rainMm, expectedRainMm }) => {
+      rainMap.set(format(date instanceof Date ? date : new Date(date), "yyyy-MM-dd"), expectedRainMm ?? rainMm ?? 0);
     });
 
     const getRain = (d) => rainMap.get(format(d, "yyyy-MM-dd")) ?? 0;
 
+    // Temperature per date (historical + forecast) so each simulated day D gets
+    // its own ET₀ window instead of reusing today's historical tempLast7. During
+    // a heatwave the forecast temps raise the weekly target for future days.
+    const futTemps = weatherInputs.tempNext5 ?? [];
+    const tempMap = new Map();
+    [...(weatherInputs.tempLast7 ?? []), ...futTemps].forEach((t) => {
+      const d = t.date instanceof Date ? t.date : new Date(t.date);
+      tempMap.set(format(d, "yyyy-MM-dd"), { ...t, date: d });
+    });
+
     const schedule = new Set();
+    let simLastWateredDate = lastWateredDate; // Carry actual + simulated waterings forward
+    const simWateredKeys = [...wateredDayKeys]; // Actual + simulated watering days for budget counting
 
     for (const fd of dailyForecastNext5) {
       const D = fd.date instanceof Date ? fd.date : new Date(fd.date);
       const last7 = Array.from({ length: 7 }, (_, i) => getRain(addDays(D, i - 7)));
 
-      // Count watered days within the 7-day window before D from actual history.
-      const wateringDaysForD = Array.from({ length: 7 }, (_, i) => {
-        const key = format(addDays(D, i - 7), "yyyy-MM-dd");
-        return wateringHistory[key] ? 1 : 0;
-      }).reduce((s, v) => s + v, 0);
-
+      const dStr = format(D, "yyyy-MM-dd");
       const simInputs = {
         ...weatherInputs,
         rainLast7: last7.reduce((s, v) => s + v, 0),
@@ -301,33 +314,66 @@ export default function App() {
         rainLast5Days: last7[2] + last7[3] + last7[4] + last7[5] + last7[6],
         maxDailyRainLast7: Math.max(...last7),
         rainNext3: [0, 1, 2].map((i) => getRain(addDays(D, i))).reduce((s, v) => s + v, 0),
-        wateringDaysLast7: wateringDaysForD,
-        lastWateredDate: null,
+        // Filter forecast to start from D so bestWateringDate is picked relative to D, not today
+        dailyForecastNext5: (weatherInputs.dailyForecastNext5 ?? []).filter((f) => {
+          const fd = f.date instanceof Date ? f.date : new Date(f.date);
+          return format(fd, "yyyy-MM-dd") >= dStr;
+        }),
+        // Rebuild the temperature windows from D's perspective (mix of historical + forecast)
+        tempLast7: Array.from({ length: 7 }, (_, i) =>
+          tempMap.get(format(addDays(D, i - 7), "yyyy-MM-dd"))
+        ).filter(Boolean),
+        tempNext5: futTemps.filter((tf) => {
+          const td = tf.date instanceof Date ? tf.date : new Date(tf.date);
+          return format(td, "yyyy-MM-dd") >= dStr;
+        }),
+        lastWateredDate: simLastWateredDate,
+        wateringDaysLast7: countWateringDaysLast7(simWateredKeys, D),
+        referenceDate: D,
         soilMultiplier,
         sensitivityFactor,
       };
 
-      let needsWater = calculateWateringAdvice(simInputs).shouldWater;
+      const bestStr = (d) => {
+        if (!d) return null;
+        return format(d instanceof Date ? d : new Date(d), "yyyy-MM-dd");
+      };
 
-      if (!needsWater && gardenPlants.length > 0) {
-        const seenCats = new Set();
-        for (const plant of gardenPlants) {
-          const cat = plant.waterCategory ?? detectWaterCategory(plant);
-          if (!CATEGORIES[cat] || seenCats.has(cat)) continue;
-          seenCats.add(cat);
-          const { multiplier, rainEfficiency } = CATEGORIES[cat];
-          if (calculateWateringAdvice({ ...simInputs, weeklyTargetMultiplier: multiplier, rainEfficiency }).shouldWater) {
-            needsWater = true;
-            break;
-          }
+      // Only mark day D if the algorithm recommends watering ON D specifically (i.e. D is the
+      // best day from D's perspective). This keeps the calendar in sync with Tab 1 which shows
+      // bestWateringDate, not just any day where shouldWater=true.
+      //
+      // Mirror Tab 1's decision exactly: when the user has plants, decide purely from
+      // per-category advice — never mix in the generic multiplier-1.0 garden advice, which
+      // would mark days green that Tab 1 (category-only) never shows. Only fall back to the
+      // generic garden advice when no plant categories are present.
+      let needsWater = false;
+      const seenCats = new Set();
+      for (const plant of gardenPlants) {
+        const cat = plant.waterCategory ?? detectWaterCategory(plant);
+        if (!CATEGORIES[cat] || seenCats.has(cat)) continue;
+        seenCats.add(cat);
+        const catAdvice = calculateWateringAdvice({ ...simInputs, ...getCategoryAdviceParams(cat, soilMultiplier) });
+        if (catAdvice.shouldWater && bestStr(catAdvice.bestWateringDate) === dStr) {
+          needsWater = true;
+          break;
         }
       }
 
-      if (needsWater) schedule.add(format(D, "yyyy-MM-dd"));
+      if (seenCats.size === 0) {
+        const mainAdvice = calculateWateringAdvice(simInputs);
+        needsWater = mainAdvice.shouldWater && bestStr(mainAdvice.bestWateringDate) === dStr;
+      }
+
+      if (needsWater) {
+        schedule.add(dStr);
+        simLastWateredDate = D; // Future days know this day was watered
+        simWateredKeys.push(dStr);
+      }
     }
 
     return schedule;
-  }, [weatherInputs, historicalDailyRain, dailyForecastNext5, gardenPlants, wateringHistory, soilMultiplier, sensitivityFactor]);
+  }, [weatherInputs, historicalDailyRain, dailyForecastNext5, gardenPlants, lastWateredDate, wateredDayKeys, soilMultiplier, sensitivityFactor]);
 
   // Silently refresh pruning months from plant_species once after auth,
   // so corrections to the canonical data reach users without re-adding plants.
@@ -381,6 +427,42 @@ export default function App() {
     [userId]
   );
 
+  // --- Sync wishlist plants to Supabase (for planting push notifications) ---
+  const syncWishlistPlants = useCallback(
+    async (plants) => {
+      if (!userId) return;
+      const rows = plants.map((p) => ({
+        id: p.id,
+        user_id: userId,
+        perenual_id: p.perenualId ?? null,
+        common_name: p.commonName,
+        scientific_name: p.scientificName ?? null,
+        planting_months: p.plantingMonths ?? [],
+        image_url: p.imageUrl ?? null,
+        cycle: p.cycle ?? null,
+        updated_at: new Date().toISOString(),
+      }));
+
+      if (rows.length > 0) {
+        const { error } = await supabase
+          .from("wishlist_plants")
+          .upsert(rows, { onConflict: "id" });
+        if (error) console.error("[wishlist] upsert failed", error);
+      }
+
+      const keepIds = plants.map((p) => p.id);
+      const deleteQ = supabase
+        .from("wishlist_plants")
+        .delete()
+        .eq("user_id", userId);
+      const { error: delError } = keepIds.length > 0
+        ? await deleteQ.not("id", "in", `(${keepIds.map((id) => `"${id}"`).join(",")})`)
+        : await deleteQ;
+      if (delError) console.error("[wishlist] delete failed", delError);
+    },
+    [userId]
+  );
+
   // Load watering sessions from Supabase on first auth and merge with localStorage
   useEffect(() => {
     if (!userId) return;
@@ -389,7 +471,8 @@ export default function App() {
       const { data, error } = await supabase
         .from("watering_sessions")
         .select("watered_on")
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .gte("watered_on", historyRetentionCutoff());
       if (error) {
         console.error("[watering] load failed", error);
         return;
@@ -405,13 +488,17 @@ export default function App() {
     loadSessions();
   }, [userId]);
 
-  // Sync lang preference to Supabase so push-daily can send localised notifications
+  // Sync preferences to Supabase so push-daily uses the same language, soil
+  // type and sensitivity as the app (they otherwise only live in localStorage).
   useEffect(() => {
     if (!userId) return;
     supabase
       .from("user_preferences")
-      .upsert({ user_id: userId, lang }, { onConflict: "user_id" });
-  }, [userId, lang]);
+      .upsert(
+        { user_id: userId, lang, soil_type: soilType, sensitivity },
+        { onConflict: "user_id" }
+      );
+  }, [userId, lang, soilType, sensitivity]);
 
   // Sync location to Supabase so push-daily can look it up
   useEffect(() => {
@@ -493,10 +580,14 @@ export default function App() {
           <BestDayToWaterScreen
             advice={advice}
             weatherInputs={weatherInputs}
+            wateringScheduleDates={wateringScheduleDates}
             gardenPlants={gardenPlants}
             wateringHistory={wateringHistory}
+            lastWateredDate={lastWateredDate}
+            wateringDaysLast7={wateringDaysLast7}
             onToggleWateredDay={handleToggleWateredDay}
             dailyForecastNext5={dailyForecastNext5}
+            currentWeatherMain={currentWeatherMain}
             isLoading={isLoading}
             error={error}
             onRetry={retry}
@@ -505,13 +596,15 @@ export default function App() {
             lang={lang}
             onSetLang={handleSetLang}
             locationName={locationName}
+            onGoToSettings={() => setActiveTab("settings")}
           />
         )}
 
-        {activeTab === "pruning" && (
-          <PruningScreen
+        {activeTab === "garden" && (
+          <MijnTuinScreen
             userId={userId}
             onSyncPlants={syncPlants}
+            onSyncWishlistPlants={syncWishlistPlants}
             lang={lang}
             latitude={locationLat}
           />
@@ -535,7 +628,6 @@ export default function App() {
 
         {activeTab === "calendar" && (
           <CalendarScreen
-            effectiveBestWateringDate={effectiveBestWateringDate}
             wateringScheduleDates={wateringScheduleDates}
             dailyForecastNext5={dailyForecastNext5}
             historicalDailyRain={historicalDailyRain}
@@ -546,6 +638,8 @@ export default function App() {
             isLoading={isLoading}
             error={error}
             onRetry={retry}
+            locationName={locationName}
+            onGoToSettings={() => setActiveTab("settings")}
             lang={lang}
           />
         )}
@@ -570,13 +664,11 @@ export default function App() {
         </button>
         <button
           type="button"
-          className={activeTab === "pruning" ? "tab-bar-button tab-bar-button--active" : "tab-bar-button"}
-          onClick={() => setActiveTab("pruning")}
+          className={activeTab === "garden" ? "tab-bar-button tab-bar-button--active" : "tab-bar-button"}
+          onClick={() => setActiveTab("garden")}
         >
-          <span className="tab-icon">
-            <img src="/hedgetrimmer3.png" alt="Pruning" width="22" height="22" style={{objectFit: "contain"}} />
-          </span>
-          <span className="tab-label">{t(lang, "tabPruning")}</span>
+          <span className="tab-icon">🪴</span>
+          <span className="tab-label">{t(lang, "tabGarden")}</span>
         </button>
         <button
           type="button"

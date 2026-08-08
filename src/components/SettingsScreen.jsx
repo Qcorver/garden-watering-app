@@ -1,20 +1,14 @@
 import React from "react";
 import LocationPicker from "./LocationPicker";
 import { t } from "../i18n";
+import { SOIL_MULTIPLIERS, getSoilMultiplier } from "@shared/wateringLogic";
 import "./SettingsScreen.css";
 
-export const SOIL_OPTIONS = [
-  { value: "unknown", multiplier: 1.0 },
-  { value: "sandy",   multiplier: 1.3 },
-  { value: "loamy",   multiplier: 1.0 },
-  { value: "clay",    multiplier: 0.7 },
-  { value: "chalky",  multiplier: 1.1 },
-  { value: "peat",    multiplier: 0.6 },
-];
+export const SOIL_OPTIONS = Object.entries(SOIL_MULTIPLIERS).map(
+  ([value, multiplier]) => ({ value, multiplier }),
+);
 
-export function getSoilMultiplier(soilType) {
-  return SOIL_OPTIONS.find((o) => o.value === soilType)?.multiplier ?? 1.0;
-}
+export { getSoilMultiplier };
 
 /**
  * @param {Object} props
@@ -41,27 +35,13 @@ export function SettingsScreen({
   pushIsLoading,
   onTogglePush,
   lang = "en",
-  onSetLang,
 }) {
   return (
     <div className="settings-screen">
 
       {/* ── HERO ── */}
       <div className="settings-hero">
-        <div className="settings-hero-top-row">
-          <div className="settings-lang-toggle">
-            <button
-              type="button"
-              className={`settings-lang-btn${lang === "en" ? " settings-lang-btn--active" : ""}`}
-              onClick={() => onSetLang?.("en")}
-            >EN</button>
-            <button
-              type="button"
-              className={`settings-lang-btn${lang === "nl" ? " settings-lang-btn--active" : ""}`}
-              onClick={() => onSetLang?.("nl")}
-            >NL</button>
-          </div>
-        </div>
+        <div className="settings-hero-top-row" />
         <h1 className="settings-hero-heading">{t(lang, "settingsHeroHeading")}</h1>
         <div className="settings-hero-sub">{t(lang, "settingsHeroSub")}</div>
       </div>

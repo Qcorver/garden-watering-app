@@ -86,11 +86,18 @@ export async function fetchForecastForCity(cityName, signal) {
 
 /**
  * Convert OpenWeather 5-day / 3-hour forecast into:
- * - rainNext3 (mm in next 3 days)
- * - dailyForecastNext5 (array of 5 days with { date, rainMm, main })
+ * - rainNext3 (probability-weighted mm in next 3 days)
+ * - dailyForecastNext5 (array of 5 days with { date, rainMm, expectedRainMm, main })
+ *
+ * rainMm is the raw forecast amount (for display); expectedRainMm weights each
+ * 3h block by its `pop` (probability of precipitation, 0–1) so that uncertain
+ * rain doesn't fully count toward the watering budget.
  */
 export function extractRainDataFromForecast(forecast) {
   const list = forecast?.list || [];
+
+  // Use the first (nearest) 3h block for current conditions, not the daily worst-case.
+  const currentWeatherMain = list[0]?.weather?.[0]?.main ?? null;
 
   const byDay = new Map();
 
@@ -110,6 +117,7 @@ export function extractRainDataFromForecast(forecast) {
       .slice(0, 10);
 
     const rain3h = entry.rain?.["3h"] ?? 0;
+    const pop = typeof entry.pop === "number" ? Math.max(0, Math.min(1, entry.pop)) : 1;
     const main = entry.weather?.[0]?.main ?? null;
     const score = main ? conditionRank[main] ?? 0 : 0;
     const tmax = entry.main?.temp_max ?? null;
@@ -118,6 +126,7 @@ export function extractRainDataFromForecast(forecast) {
     const prev =
       byDay.get(dayKey) ?? {
         rainMm: 0,
+        expectedRainMm: 0,
         main: null,
         score: 0,
         tmax: null,
@@ -126,6 +135,7 @@ export function extractRainDataFromForecast(forecast) {
 
     const next = {
       rainMm: prev.rainMm + rain3h,
+      expectedRainMm: prev.expectedRainMm + rain3h * pop,
       main: prev.main,
       score: prev.score,
       tmax: tmax !== null ? (prev.tmax !== null ? Math.max(prev.tmax, tmax) : tmax) : prev.tmax,
@@ -145,6 +155,7 @@ export function extractRainDataFromForecast(forecast) {
     .map(([dayKey, value]) => ({
       date: new Date(dayKey + "T00:00:00"),
       rainMm: value.rainMm,
+      expectedRainMm: value.expectedRainMm,
       main: value.main,
       tmax: value.tmax,
       tmin: value.tmin,
@@ -155,7 +166,7 @@ export function extractRainDataFromForecast(forecast) {
 
   const rainNext3 = next5Days
     .slice(0, 3)
-    .reduce((sum, d) => sum + (d.rainMm || 0), 0);
+    .reduce((sum, d) => sum + (d.expectedRainMm || 0), 0);
 
   // tempNext5: days with complete temperature data, for forward ET₀ calculation.
   const tempNext5 = next5Days
@@ -167,6 +178,7 @@ export function extractRainDataFromForecast(forecast) {
     rainNext3,
     dailyForecastNext5: next5Days,
     tempNext5,
+    currentWeatherMain,
   };
 }
 

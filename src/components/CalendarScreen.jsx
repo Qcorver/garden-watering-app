@@ -6,7 +6,6 @@ import {
   endOfWeek,
   eachDayOfInterval,
   addMonths,
-  isSameDay,
   isSameMonth,
   isToday,
   format,
@@ -16,7 +15,6 @@ import { t, getDateLocale } from "../i18n";
 
 /**
  * @param {Object} props
- * @param {Date|null} props.effectiveBestWateringDate
  * @param {Set<string>} props.wateringScheduleDates - ISO dates of upcoming days that need watering
  * @param {Array<Object>} props.dailyForecastNext5
  * @param {Array<Object>} props.historicalDailyRain
@@ -47,7 +45,6 @@ function InfoSheet({ title, body, onClose }) {
 }
 
 export function CalendarScreen({
-  effectiveBestWateringDate,
   wateringScheduleDates,
   dailyForecastNext5,
   historicalDailyRain,
@@ -59,15 +56,17 @@ export function CalendarScreen({
   error,
   onRetry,
   lang = "en",
+  locationName = "",
+  onGoToSettings,
 }) {
   const [showInfo, setShowInfo] = useState(false);
   const dateLocale = getDateLocale(lang);
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  // Navigation bounds: 1 month back, current month max
+  // Navigation bounds: 1 month back, 1 month ahead (forecast spans into next month near month-end)
   const minMonth = startOfMonth(addMonths(today, -1));
-  const maxMonth = startOfMonth(today);
+  const maxMonth = startOfMonth(addMonths(today, 1));
   const canGoPrev = currentMonth > minMonth;
   const canGoNext = currentMonth < maxMonth;
 
@@ -132,12 +131,11 @@ export function CalendarScreen({
     return "☀️";
   };
 
-  const isBestWateringDay = (day) => {
-    const iso = format(day, "yyyy-MM-dd");
-    if (wateringScheduleDates?.has(iso)) return true;
-    if (!effectiveBestWateringDate) return false;
-    return isSameDay(day, effectiveBestWateringDate);
-  };
+  // Single source of truth: the forward-simulation schedule from App.jsx.
+  // (The old `effectiveBestWateringDate` fallback was a separate, non-cascading
+  // "today-relative" date that caused misalignment with Tab 1 and made the
+  // second green day disappear once the first was marked watered.)
+  const isBestWateringDay = (day) => wateringScheduleDates?.has(format(day, "yyyy-MM-dd"));
 
   const isWateredDay = (day) => Boolean(wateringHistory[format(day, "yyyy-MM-dd")]);
   const isFutureDay = (day) => day > today;
@@ -213,6 +211,17 @@ export function CalendarScreen({
       {/* ── BODY ── */}
       <div className="cal-body">
 
+        {!isLoading && !error && !locationName && (
+          <div className="best-no-location">
+            <div className="best-no-location-icon">📍</div>
+            <p className="best-no-location-title">{t(lang, "noLocationTitle")}</p>
+            <p className="best-no-location-sub">{t(lang, "noLocationSub")}</p>
+            <button type="button" className="best-retry-btn" onClick={onGoToSettings}>
+              {t(lang, "noLocationCta")}
+            </button>
+          </div>
+        )}
+
         {error && (
           <div className="cal-error-block">
             <p className="cal-error">{error}</p>
@@ -223,6 +232,8 @@ export function CalendarScreen({
         )}
         {isLoading && <p className="cal-loading">{t(lang, "loadingWeather")}</p>}
 
+        {locationName && (
+        <>
         {/* Weekday header */}
         <div className="cal-weekdays">
           {weekdays.map((d) => (
@@ -245,9 +256,15 @@ export function CalendarScreen({
               : Boolean(weatherByDate[iso]);
             const noData = futureDay && !hasWeather;
 
+            // Today: measured rain (Open-Meteo nowcast) beats the OpenWeather
+            // forecast — if it already rained this morning, show rain even
+            // when the forecast said dry. Otherwise use the forecast emoji
+            // (it covers the rest of the day).
             const emoji = isPastDay
               ? getHistoricalEmoji(historicalByDate[iso])
-              : getWeatherEmoji(weatherByDate[iso]);
+              : todayDay && Number(historicalByDate[iso]?.rainMm ?? 0) >= 1
+                ? "🌧️"
+                : getWeatherEmoji(weatherByDate[iso]);
 
             // today = outline; best = filled green; watered = filled blue; classes can combine
             const cellClass = [
@@ -292,6 +309,8 @@ export function CalendarScreen({
             <span className="cal-legend-label">{t(lang, "calLegendWatered")}</span>
           </div>
         </div>
+        </>
+        )}
       </div>
 
       {showInfo && (

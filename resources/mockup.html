@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhenToWater — Redesign Mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #1a1a1a;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 40px 20px;
+    font-family: 'DM Sans', sans-serif;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+
+  /* ── Phone Frame ─────────────────────────────── */
+  .phone-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .tab-label {
+    color: #888;
+    font-size: 12px;
+    font-family: 'DM Sans', sans-serif;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .phone {
+    width: 390px;
+    height: 844px;
+    background: #e8ede3;
+    border-radius: 50px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.15);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Status bar ──────────────────────────────── */
+  .status-bar {
+    padding: 14px 28px 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .status-bar .time {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1a3d1a;
+  }
+  .status-bar .icons {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    font-size: 14px;
+    color: #1a3d1a;
+  }
+
+  /* ── Scrollable content ──────────────────────── */
+  .screen-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-bottom: 100px;
+    scrollbar-width: none;
+  }
+  .screen-content::-webkit-scrollbar { display: none; }
+
+  /* ── Bottom tab bar ──────────────────────────── */
+  .tab-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0; right: 0;
+    height: 90px;
+    background: rgba(232, 237, 227, 0.95);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(100,130,100,0.15);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-around;
+    padding-top: 10px;
+    padding-bottom: 20px;
+  }
+  .tab-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    width: 72px;
+  }
+  .tab-icon-wrap {
+    width: 48px;
+    height: 32px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    transition: background 0.2s;
+  }
+  .tab-item.active .tab-icon-wrap {
+    background: #2d5a1b;
+  }
+  .tab-item.active .tab-icon-wrap span { filter: brightness(10); }
+  .tab-name {
+    font-size: 10px;
+    color: #6b8c6b;
+    font-weight: 500;
+  }
+  .tab-item.active .tab-name { color: #2d5a1b; font-weight: 600; }
+
+  /* ── Design tokens ───────────────────────────── */
+  :root {
+    --bg: #e8ede3;
+    --card: #ffffff;
+    --green-dark: #1a3d1a;
+    --green-mid: #2d5a1b;
+    --green-light: #4a8c35;
+    --green-pale: #c8dbb8;
+    --sage: #8aac7a;
+    --text-primary: #1a3d1a;
+    --text-secondary: #5a7a5a;
+    --text-muted: #8aac8a;
+    --accent-yellow: #e8c84a;
+    --accent-red: #d4503a;
+    --accent-blue: #4a8abf;
+    --radius-card: 20px;
+    --radius-sm: 12px;
+    --shadow: 0 2px 16px rgba(30,70,30,0.10);
+  }
+
+  /* ── Shared card ─────────────────────────────── */
+  .card {
+    background: var(--card);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow);
+    margin: 0 16px 12px;
+    overflow: hidden;
+  }
+  .card-pad { padding: 18px; }
+
+  /* ══════════════════════════════════════════════
+     TAB 1 — WATERING (Best Day)
+  ══════════════════════════════════════════════ */
+  .hero-greeting {
+    padding: 8px 20px 16px;
+  }
+  .hero-greeting h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    color: var(--green-dark);
+    line-height: 1.1;
+  }
+  .hero-greeting .subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+  .hero-greeting .location-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(45,90,27,0.10);
+    border-radius: 20px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--green-mid);
+    font-weight: 600;
+    margin-top: 8px;
+  }
+
+  /* Illustration card */
+  .illus-card {
+    background: linear-gradient(145deg, #d4e8c4 0%, #b8d4a0 100%);
+    border-radius: var(--radius-card);
+    margin: 0 16px 12px;
+    padding: 24px 20px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: var(--shadow);
+  }
+  .illus-svg {
+    width: 90px;
+    height: 90px;
+    flex-shrink: 0;
+  }
+  .illus-text { flex: 1; }
+  .illus-badge {
+    display: inline-block;
+    background: var(--green-mid);
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 20px;
+    padding: 3px 10px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .illus-badge.yellow { background: #c8a020; }
+  .illus-badge.blue { background: var(--accent-blue); }
+  .illus-date {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    color: var(--green-dark);
+    line-height: 1.2;
+  }
+  .illus-amount {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+
+  /* Rain stats card */
+  .stats-card { }
+  .stats-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+  }
+  .stat-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .stat-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    width: 120px;
+    flex-shrink: 0;
+  }
+  .stat-bar-wrap {
+    flex: 1;
+    height: 6px;
+    background: #e8ede3;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .stat-bar {
+    height: 100%;
+    border-radius: 3px;
+    background: var(--green-light);
+  }
+  .stat-bar.yellow { background: var(--accent-yellow); }
+  .stat-bar.blue { background: var(--accent-blue); }
+  .stat-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    width: 36px;
+    text-align: right;
+  }
+
+  /* Category cards */
+  .cat-section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 16px 20px 8px;
+  }
+  .cat-card {
+    background: var(--card);
+    border-radius: var(--radius-card);
+    margin: 0 16px 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .cat-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #f0f4ec;
+  }
+  .cat-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: #e8f0e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+  .cat-info { flex: 1; }
+  .cat-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .cat-amount {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .cat-arrow {
+    color: var(--text-muted);
+    font-size: 16px;
+  }
+  .plant-row-small {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid #f4f8f0;
+  }
+  .plant-row-small:last-child { border-bottom: none; }
+  .plant-thumb-sm {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #c8dbb8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .plant-name-sm {
+    flex: 1;
+    font-size: 14px;
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+  .plant-badge-sm {
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: #f0f4ec;
+    border-radius: 8px;
+    padding: 2px 8px;
+  }
+
+  /* Water toggle */
+  .water-toggle-card {
+    background: var(--green-mid);
+    border-radius: var(--radius-card);
+    margin: 0 16px 12px;
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: var(--shadow);
+  }
+  .water-toggle-left { }
+  .water-toggle-label {
+    font-size: 15px;
+    font-weight: 600;
+    color: white;
+  }
+  .water-toggle-sub {
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+    margin-top: 2px;
+  }
+  .toggle-switch {
+    width: 50px;
+    height: 28px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 14px;
+    position: relative;
+    cursor: pointer;
+  }
+  .toggle-switch.on { background: #a0d060; }
+  .toggle-knob {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: white;
+    transition: left 0.2s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  }
+  .toggle-switch.on .toggle-knob { left: 25px; }
+
+  /* ══════════════════════════════════════════════
+     TAB 2 — CALENDAR
+  ══════════════════════════════════════════════ */
+  .cal-header {
+    padding: 8px 20px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .cal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    color: var(--green-dark);
+  }
+  .cal-nav { display: flex; gap: 8px; }
+  .cal-nav-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: white;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: var(--green-dark);
+    cursor: pointer;
+    box-shadow: var(--shadow);
+  }
+
+  .cal-card {
+    background: var(--card);
+    border-radius: var(--radius-card);
+    margin: 0 16px 12px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+  }
+  .cal-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    margin-bottom: 8px;
+  }
+  .cal-wd {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+  .cal-day {
+    aspect-ratio: 1;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    position: relative;
+    cursor: pointer;
+  }
+  .cal-day.today {
+    background: var(--green-mid);
+    color: white;
+    font-weight: 700;
+  }
+  .cal-day.watered {
+    background: #b8d4a0;
+    color: var(--green-dark);
+    font-weight: 600;
+  }
+  .cal-day.rain-heavy {
+    background: #ddeeff;
+    color: #336699;
+  }
+  .cal-day.rain-light {
+    background: #eef5ff;
+    color: #6699bb;
+  }
+  .cal-day.dry {
+    background: #fdf8ec;
+    color: #aa8822;
+  }
+  .cal-day.empty { opacity: 0; pointer-events: none; }
+  .cal-day.future { opacity: 0.4; }
+  .cal-day.best-day {
+    background: #ffe8a0;
+    color: #aa7700;
+    font-weight: 700;
+  }
+  .cal-day .rain-dot {
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent-blue);
+  }
+
+  .cal-legend {
+    background: var(--card);
+    border-radius: var(--radius-card);
+    margin: 0 16px 12px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+  }
+  .legend-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+  }
+  .legend-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .legend-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 5px;
+    flex-shrink: 0;
+  }
+
+  /* Rain chart */
+  .rain-chart-card {
+    background: var(--card);
+    border-radius: var(--radius-card);
+    margin: 0 16px 12px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+  }
+  .rain-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 60px;
+    margin-bottom: 6px;
+  }
+  .rain-bar-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+    gap: 2px;
+  }
+  .rain-bar {
+    width: 100%;
+    border-radius: 4px 4px 0 0;
+    background: var(--accent-blue);
+    opacity: 0.7;
+  }
+  .rain-bar-label {
+    font-size: 9px;
+    color: var(--text-muted);
+  }
+
+  /* ══════════════════════════════════════════════
+     TAB 3 — PLANTS / PRUNING
+  ══════════════════════════════════════════════ */
+  .plants-header {
+    padding: 8px 20px 12px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+  .plants-header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    color: var(--green-dark);
+  }
+  .plants-header .plant-count {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+
+  .month-strip {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 0 16px 12px;
+    scrollbar-width: none;
+  }
+  .month-strip::-webkit-scrollbar { display: none; }
+  .month-chip {
+    flex-shrink: 0;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--card);
+    color: var(--text-secondary);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .month-chip.active {
+    background: var(--green-mid);
+    color: white;
+  }
+  .month-chip.prune-due {
+    background: #fff3cd;
+    color: #996600;
+  }
+
+  .plant-card {
+    background: var(--card);
+    border-radius: var(--radius-card);
+    margin: 0 16px 10px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: var(--shadow);
+  }
+  .plant-img {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: linear-gradient(135deg, #c8dbb8, #a0c090);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .plant-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .plant-info { flex: 1; min-width: 0; }
+  .plant-name-main {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .plant-sci {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+    margin-top: 2px;
+  }
+  .plant-tags {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+  }
+  .plant-tag {
+    font-size: 10px;
+    font-weight: 600;
+    border-radius: 8px;
+    padding: 2px 8px;
+    background: #e8f0e0;
+    color: var(--green-mid);
+  }
+  .plant-tag.prune-soon {
+    background: #fff3cd;
+    color: #996600;
+  }
+  .plant-tag.water-more {
+    background: #ddeeff;
+    color: #336699;
+  }
+  .plant-chevron {
+    color: var(--text-muted);
+    font-size: 16px;
+  }
+
+  .fab {
+    position: absolute;
+    bottom: 100px;
+    right: 24px;
+    width: 52px;
+    height: 52px;
+    border-radius: 26px;
+    background: var(--green-mid);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    box-shadow: 0 4px 16px rgba(45,90,27,0.4);
+    cursor: pointer;
+    z-index: 10;
+    line-height: 1;
+  }
+
+  /* Next pruning card */
+  .prune-alert-card {
+    background: linear-gradient(135deg, #fff8dc, #fff3b0);
+    border-radius: var(--radius-card);
+    margin: 0 16px 12px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: var(--shadow);
+  }
+  .prune-alert-icon { font-size: 24px; }
+  .prune-alert-text { flex: 1; }
+  .prune-alert-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #7a5500;
+  }
+  .prune-alert-sub {
+    font-size: 12px;
+    color: #9a7520;
+    margin-top: 2px;
+  }
+
+  /* ══════════════════════════════════════════════
+     TAB 4 — SETTINGS
+  ══════════════════════════════════════════════ */
+  .settings-header {
+    padding: 8px 20px 16px;
+  }
+  .settings-header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    color: var(--green-dark);
+  }
+  .settings-header .subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+
+  .settings-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin: 8px 20px 6px;
+  }
+
+  .settings-card {
+    background: var(--card);
+    border-radius: var(--radius-card);
+    margin: 0 16px 8px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .settings-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #f0f4ec;
+  }
+  .settings-row:last-child { border-bottom: none; }
+  .settings-row-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .settings-row-icon.green { background: #e0f0d0; }
+  .settings-row-icon.blue { background: #ddeeff; }
+  .settings-row-icon.orange { background: #fff0dc; }
+  .settings-row-icon.purple { background: #f0e8ff; }
+  .settings-row-label {
+    flex: 1;
+  }
+  .settings-row-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  .settings-row-value {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 1px;
+  }
+  .settings-row-action {
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  /* Soil picker */
+  .soil-pills {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 10px 16px 14px;
+  }
+  .soil-pill {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    background: #f0f4ec;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .soil-pill.active {
+    background: var(--green-mid);
+    color: white;
+  }
+
+  /* Sensitivity slider */
+  .slider-row {
+    padding: 10px 16px 14px;
+  }
+  .slider-track {
+    width: 100%;
+    height: 6px;
+    background: #e8ede3;
+    border-radius: 3px;
+    position: relative;
+    margin-top: 6px;
+  }
+  .slider-fill {
+    position: absolute;
+    left: 50%;
+    width: 10%;
+    height: 100%;
+    background: var(--green-mid);
+    border-radius: 3px;
+  }
+  .slider-thumb {
+    position: absolute;
+    top: 50%;
+    left: 55%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.2);
+    border: 2px solid var(--green-mid);
+  }
+  .slider-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  /* Lang toggle */
+  .lang-toggle {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .lang-btn {
+    padding: 4px 12px;
+    border-radius: 14px;
+    font-size: 13px;
+    font-weight: 600;
+    background: #f0f4ec;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .lang-btn.active {
+    background: var(--green-mid);
+    color: white;
+  }
+
+  /* ══════════════════════════════════════════════
+     Page switcher (outside phone — for demo)
+  ══════════════════════════════════════════════ */
+  .demo-switcher {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .demo-btn {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #333;
+    color: #999;
+    cursor: pointer;
+    border: none;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.15s;
+  }
+  .demo-btn.active {
+    background: #4a8c35;
+    color: white;
+  }
+
+  /* show/hide screens */
+  .screen { display: none; }
+  .screen.visible { display: block; }
+</style>
+</head>
+<body>
+
+<div class="phone-wrapper">
+  <div class="phone" id="phone">
+    <!-- Status bar -->
+    <div class="status-bar">
+      <span class="time">9:41</span>
+      <span class="icons">▶ ☁ 🔋</span>
+    </div>
+
+    <!-- ══ TAB 1: WATERING ══ -->
+    <div class="screen-content screen visible" id="screen-water">
+
+      <div class="hero-greeting">
+        <h1>Goedendag ☀️</h1>
+        <div class="subtitle">Hier is het wateradvies voor je tuin</div>
+        <div class="location-chip">📍 Amsterdam, NL</div>
+      </div>
+
+      <!-- Plant illustration + recommendation -->
+      <div class="illus-card">
+        <!-- Simple SVG plant -->
+        <svg class="illus-svg" viewBox="0 0 90 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Pot -->
+          <rect x="30" y="68" width="30" height="18" rx="4" fill="#8B6914"/>
+          <rect x="27" y="65" width="36" height="7" rx="3.5" fill="#A07820"/>
+          <!-- Soil -->
+          <ellipse cx="45" cy="65" rx="16" ry="4" fill="#5a3e1a"/>
+          <!-- Stem -->
+          <path d="M45 65 Q43 52 40 42" stroke="#3d7a2a" stroke-width="2.5" stroke-linecap="round"/>
+          <!-- Left leaf -->
+          <path d="M40 52 Q26 44 28 34 Q38 38 40 52Z" fill="#5aaa3a"/>
+          <!-- Right leaf -->
+          <path d="M43 46 Q56 36 58 26 Q48 32 43 46Z" fill="#4a9030"/>
+          <!-- Top leaf -->
+          <path d="M40 42 Q36 28 42 22 Q48 28 40 42Z" fill="#6aba4a"/>
+          <!-- Sun rays -->
+          <circle cx="72" cy="18" r="8" fill="#f0c030" opacity="0.9"/>
+          <line x1="72" y1="6" x2="72" y2="3" stroke="#f0c030" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="80" y1="10" x2="82" y2="8" stroke="#f0c030" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="84" y1="18" x2="87" y2="18" stroke="#f0c030" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="80" y1="26" x2="82" y2="28" stroke="#f0c030" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="64" y1="10" x2="62" y2="8" stroke="#f0c030" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <div class="illus-text">
+          <div class="illus-badge">Beste dag</div>
+          <div class="illus-date">Vrijdag 15 mei</div>
+          <div class="illus-amount">💧 Water ~12 min/m²</div>
+        </div>
+      </div>
+
+      <!-- Rain stats -->
+      <div class="card card-pad">
+        <div class="stats-title">Regenstatistieken</div>
+        <div class="stat-row">
+          <div class="stat-label">Regen afgelopen week</div>
+          <div class="stat-bar-wrap"><div class="stat-bar blue" style="width:38%"></div></div>
+          <div class="stat-value">9 mm</div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-label">Regen komende 3 d.</div>
+          <div class="stat-bar-wrap"><div class="stat-bar" style="width:15%"></div></div>
+          <div class="stat-value">3 mm</div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-label">Wekelijks doel</div>
+          <div class="stat-bar-wrap"><div class="stat-bar yellow" style="width:100%"></div></div>
+          <div class="stat-value">24 mm</div>
+        </div>
+      </div>
+
+      <!-- Water toggle -->
+      <div class="water-toggle-card">
+        <div class="water-toggle-left">
+          <div class="water-toggle-label">Vandaag gegoten</div>
+          <div class="water-toggle-sub">Tik om te markeren in kalender</div>
+        </div>
+        <div class="toggle-switch">
+          <div class="toggle-knob"></div>
+        </div>
+      </div>
+
+      <!-- Per category -->
+      <div class="cat-section-title">Per plantcategorie</div>
+
+      <div class="cat-card">
+        <div class="cat-header">
+          <div class="cat-icon">🥕</div>
+          <div class="cat-info">
+            <div class="cat-name">Groenten & kruiden</div>
+            <div class="cat-amount">Water ~15 min/m² — dorstig</div>
+          </div>
+          <div class="cat-arrow">›</div>
+        </div>
+        <div class="plant-row-small">
+          <div class="plant-thumb-sm">🍅</div>
+          <div class="plant-name-sm">Tomaat</div>
+          <div class="plant-badge-sm">15 min</div>
+        </div>
+        <div class="plant-row-small">
+          <div class="plant-thumb-sm">🌿</div>
+          <div class="plant-name-sm">Basilicum</div>
+          <div class="plant-badge-sm">12 min</div>
+        </div>
+      </div>
+
+      <div class="cat-card">
+        <div class="cat-header">
+          <div class="cat-icon">🌸</div>
+          <div class="cat-info">
+            <div class="cat-name">Borders & vaste planten</div>
+            <div class="cat-amount">Water ~10 min/m² — licht droog</div>
+          </div>
+          <div class="cat-arrow">›</div>
+        </div>
+        <div class="plant-row-small">
+          <div class="plant-thumb-sm">🌺</div>
+          <div class="plant-name-sm">Hortensia</div>
+          <div class="plant-badge-sm">10 min</div>
+        </div>
+      </div>
+
+      <div class="cat-card">
+        <div class="cat-header">
+          <div class="cat-icon">🪴</div>
+          <div class="cat-info">
+            <div class="cat-name">Kuipplanten</div>
+            <div class="cat-amount">Water ~18 min/m² — droog</div>
+          </div>
+          <div class="cat-arrow">›</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══ TAB 2: CALENDAR ══ -->
+    <div class="screen-content screen" id="screen-calendar">
+
+      <div class="cal-header">
+        <div class="cal-title">Mei 2026</div>
+        <div class="cal-nav">
+          <button class="cal-nav-btn">‹</button>
+          <button class="cal-nav-btn">›</button>
+        </div>
+      </div>
+
+      <!-- Mini rain bar chart -->
+      <div class="rain-chart-card">
+        <div class="stats-title">Regen per dag (mm)</div>
+        <div class="rain-bars">
+          <div class="rain-bar-wrap"><div class="rain-bar" style="height:30%"></div><div class="rain-bar-label">1</div></div>
+          <div class="rain-bar-wrap"><div class="rain-bar" style="height:5%"></div><div class="rain-bar-label">2</div></div>
+          <div class="rain-bar-wrap"><div class="rain-bar" style="height:0%"></div><div class="rain-bar-label">3</div></div>
+          <div class="rain-bar-wrap"><div class="rain-bar" style="height:60%"></div><div class="rain-bar-label">4</div></div>
+          <div class="rain-bar-wrap"><div class="rain-bar" style="height:80%"></div><div class="rain-bar-label">5</div></div>
+          <div class="rain-bar-wrap"><div class="rain-bar" style="height:20%"></div><div class="rain-bar-label">6</div></div>
+          <div class="rain-bar-wrap"><div class="rain-bar" style="height:5%"></div><div class="rain-bar-label">7</div></div>
+          <div class="rain-bar-wrap"><div class="rain-bar" style="height:0%"></div><div class="rain-bar-label">8</div></div>
+          <div class="rain-bar-wrap"><div class="rain-bar" style="height:0%"></div><div class="rain-bar-label">9</div></div>
+          <div class="rain-bar-wrap"><div class="rain-bar" style="height:10%"></div><div class="rain-bar-label">10</div></div>
+          <div class="rain-bar-wrap"><div class="rain-bar" style="height:0%"></div><div class="rain-bar-label">11</div></div>
+          <div class="rain-bar-wrap"><div class="rain-bar" style="height:0%"></div><div class="rain-bar-label">12</div></div>
+          <div class="rain-bar-wrap"><div class="rain-bar" style="height:0%"></div><div class="rain-bar-label">13</div></div>
+          <div class="rain-bar-wrap"><div class="rain-bar" style="height:40%"></div><div class="rain-bar-label">14</div></div>
+          <div class="rain-bar-wrap"><div class="rain-bar" style="height:15%"></div><div class="rain-bar-label">15</div></div>
+        </div>
+      </div>
+
+      <div class="cal-card">
+        <div class="cal-weekdays">
+          <div class="cal-wd">Ma</div><div class="cal-wd">Di</div>
+          <div class="cal-wd">Wo</div><div class="cal-wd">Do</div>
+          <div class="cal-wd">Vr</div><div class="cal-wd">Za</div>
+          <div class="cal-wd">Zo</div>
+        </div>
+        <div class="cal-grid">
+          <!-- Row 1: May starts on Friday (index 4) -->
+          <div class="cal-day empty"></div>
+          <div class="cal-day empty"></div>
+          <div class="cal-day empty"></div>
+          <div class="cal-day empty"></div>
+          <div class="cal-day rain-light">1<div class="rain-dot"></div></div>
+          <div class="cal-day dry">2</div>
+          <div class="cal-day dry">3</div>
+          <!-- Row 2 -->
+          <div class="cal-day rain-heavy">4<div class="rain-dot"></div></div>
+          <div class="cal-day rain-heavy">5<div class="rain-dot"></div></div>
+          <div class="cal-day rain-light">6<div class="rain-dot"></div></div>
+          <div class="cal-day dry">7</div>
+          <div class="cal-day watered">8</div>
+          <div class="cal-day dry">9</div>
+          <div class="cal-day dry">10</div>
+          <!-- Row 3 -->
+          <div class="cal-day rain-light">11<div class="rain-dot"></div></div>
+          <div class="cal-day dry">12</div>
+          <div class="cal-day dry">13</div>
+          <div class="cal-day rain-light">14<div class="rain-dot"></div></div>
+          <div class="cal-day best-day">15</div>
+          <div class="cal-day future">16</div>
+          <div class="cal-day future">17</div>
+          <!-- Row 4 -->
+          <div class="cal-day future">18</div>
+          <div class="cal-day future">19</div>
+          <div class="cal-day future">20</div>
+          <div class="cal-day future">21</div>
+          <div class="cal-day future">22</div>
+          <div class="cal-day future">23</div>
+          <div class="cal-day future">24</div>
+          <!-- Row 5 -->
+          <div class="cal-day future">25</div>
+          <div class="cal-day future">26</div>
+          <div class="cal-day future">27</div>
+          <div class="cal-day future">28</div>
+          <div class="cal-day future">29</div>
+          <div class="cal-day future">30</div>
+          <div class="cal-day future">31</div>
+        </div>
+      </div>
+
+      <div class="cal-legend">
+        <div class="legend-title">Legenda</div>
+        <div class="legend-grid">
+          <div class="legend-item"><div class="legend-dot" style="background:#b8d4a0"></div>Gegoten</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#ffe8a0"></div>Beste dag</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#ddeeff"></div>Veel regen</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#eef5ff"></div>Weinig regen</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#fdf8ec"></div>Droog</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#2d5a1b;border-radius:50%"></div>Vandaag</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══ TAB 3: PLANTS ══ -->
+    <div class="screen-content screen" id="screen-plants">
+
+      <div class="plants-header">
+        <div>
+          <h1>Mijn tuin</h1>
+          <div class="plant-count">7 planten · 2 binnenkort snoeien</div>
+        </div>
+      </div>
+
+      <!-- Pruning alert -->
+      <div class="prune-alert-card">
+        <div class="prune-alert-icon">✂️</div>
+        <div class="prune-alert-text">
+          <div class="prune-alert-title">Snoeitijd: mei–juni</div>
+          <div class="prune-alert-sub">Hortensia en Roos zijn aan de beurt</div>
+        </div>
+        <div style="color:#aa7700;font-size:16px">›</div>
+      </div>
+
+      <!-- Month filter strip -->
+      <div class="month-strip">
+        <div class="month-chip">Jan</div>
+        <div class="month-chip">Feb</div>
+        <div class="month-chip">Mrt</div>
+        <div class="month-chip">Apr</div>
+        <div class="month-chip active">Mei</div>
+        <div class="month-chip prune-due">Jun</div>
+        <div class="month-chip">Jul</div>
+        <div class="month-chip">Aug</div>
+        <div class="month-chip">Sep</div>
+        <div class="month-chip">Okt</div>
+        <div class="month-chip">Nov</div>
+        <div class="month-chip">Dec</div>
+      </div>
+
+      <!-- Plant cards -->
+      <div class="plant-card">
+        <div class="plant-img">🌺</div>
+        <div class="plant-info">
+          <div class="plant-name-main">Hortensia</div>
+          <div class="plant-sci">Hydrangea macrophylla</div>
+          <div class="plant-tags">
+            <div class="plant-tag prune-soon">✂️ Snoeien: jun</div>
+            <div class="plant-tag water-more">💧 Meer water</div>
+          </div>
+        </div>
+        <div class="plant-chevron">›</div>
+      </div>
+
+      <div class="plant-card">
+        <div class="plant-img">🌹</div>
+        <div class="plant-info">
+          <div class="plant-name-main">Klimroos</div>
+          <div class="plant-sci">Rosa multiflora</div>
+          <div class="plant-tags">
+            <div class="plant-tag prune-soon">✂️ Snoeien: mei</div>
+          </div>
+        </div>
+        <div class="plant-chevron">›</div>
+      </div>
+
+      <div class="plant-card">
+        <div class="plant-img">🍅</div>
+        <div class="plant-info">
+          <div class="plant-name-main">Tomaat</div>
+          <div class="plant-sci">Solanum lycopersicum</div>
+          <div class="plant-tags">
+            <div class="plant-tag water-more">💧 Veel water</div>
+            <div class="plant-tag">🥕 Groente</div>
+          </div>
+        </div>
+        <div class="plant-chevron">›</div>
+      </div>
+
+      <div class="plant-card">
+        <div class="plant-img">🌵</div>
+        <div class="plant-info">
+          <div class="plant-name-main">Lavendel</div>
+          <div class="plant-sci">Lavandula angustifolia</div>
+          <div class="plant-tags">
+            <div class="plant-tag">🌵 Droogtetolerant</div>
+          </div>
+        </div>
+        <div class="plant-chevron">›</div>
+      </div>
+
+      <div class="plant-card">
+        <div class="plant-img">🌳</div>
+        <div class="plant-info">
+          <div class="plant-name-main">Appelboom</div>
+          <div class="plant-sci">Malus domestica</div>
+          <div class="plant-tags">
+            <div class="plant-tag">🌳 Boom</div>
+          </div>
+        </div>
+        <div class="plant-chevron">›</div>
+      </div>
+
+      <div class="fab">+</div>
+    </div>
+
+    <!-- ══ TAB 4: SETTINGS ══ -->
+    <div class="screen-content screen" id="screen-settings">
+
+      <div class="settings-header">
+        <h1>Instellingen</h1>
+        <div class="subtitle">Personaliseer je wateradvies</div>
+      </div>
+
+      <div class="settings-section-title">Locatie</div>
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-row-icon green">📍</div>
+          <div class="settings-row-label">
+            <div class="settings-row-title">Amsterdam, NL</div>
+            <div class="settings-row-value">Tik om te wijzigen</div>
+          </div>
+          <div class="settings-row-action">›</div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-icon blue">🎯</div>
+          <div class="settings-row-label">
+            <div class="settings-row-title">Gebruik GPS-locatie</div>
+            <div class="settings-row-value">Automatisch je positie</div>
+          </div>
+          <div class="toggle-switch on" style="width:42px;height:24px;border-radius:12px;">
+            <div class="toggle-knob" style="width:18px;height:18px;left:21px;top:3px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section-title">Grondsoort</div>
+      <div class="settings-card">
+        <div class="settings-row" style="flex-wrap:wrap;gap:6px;">
+          <div class="settings-row-icon orange">🌱</div>
+          <div class="settings-row-label">
+            <div class="settings-row-title">Welke grond heb je?</div>
+            <div class="settings-row-value">Beïnvloedt hoeveel water nodig is</div>
+          </div>
+        </div>
+        <div class="soil-pills">
+          <div class="soil-pill">Onbekend</div>
+          <div class="soil-pill active">Zandgrond</div>
+          <div class="soil-pill">Kleigrond</div>
+          <div class="soil-pill">Leemgrond</div>
+          <div class="soil-pill">Kalkgrond</div>
+          <div class="soil-pill">Veengrond</div>
+        </div>
+      </div>
+
+      <div class="settings-section-title">Gevoeligheid</div>
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-row-icon green">🎚</div>
+          <div class="settings-row-label">
+            <div class="settings-row-title">Wateradvies gevoeligheid</div>
+            <div class="settings-row-value">+10% (iets vaker water geven)</div>
+          </div>
+        </div>
+        <div class="slider-row">
+          <div class="slider-track">
+            <div class="slider-fill"></div>
+            <div class="slider-thumb"></div>
+          </div>
+          <div class="slider-labels">
+            <span>Spaarzamer (−50%)</span>
+            <span>Vrijgeviger (+50%)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section-title">Meldingen</div>
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-row-icon blue">🔔</div>
+          <div class="settings-row-label">
+            <div class="settings-row-title">Dagelijkse herinnering</div>
+            <div class="settings-row-value">Elke dag om 10:00</div>
+          </div>
+          <div class="toggle-switch on" style="width:42px;height:24px;border-radius:12px;">
+            <div class="toggle-knob" style="width:18px;height:18px;left:21px;top:3px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section-title">Taal</div>
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-row-icon purple">🌐</div>
+          <div class="settings-row-label">
+            <div class="settings-row-title">Taal / Language</div>
+          </div>
+          <div class="lang-toggle">
+            <div class="lang-btn active">NL</div>
+            <div class="lang-btn">EN</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="height: 20px;"></div>
+    </div>
+
+    <!-- Bottom tab bar -->
+    <div class="tab-bar">
+      <div class="tab-item active" id="tab-water" onclick="switchTab('water')">
+        <div class="tab-icon-wrap"><span>💧</span></div>
+        <div class="tab-name">Water</div>
+      </div>
+      <div class="tab-item" id="tab-calendar" onclick="switchTab('calendar')">
+        <div class="tab-icon-wrap"><span>📅</span></div>
+        <div class="tab-name">Kalender</div>
+      </div>
+      <div class="tab-item" id="tab-plants" onclick="switchTab('plants')">
+        <div class="tab-icon-wrap"><span>🌿</span></div>
+        <div class="tab-name">Planten</div>
+      </div>
+      <div class="tab-item" id="tab-settings" onclick="switchTab('settings')">
+        <div class="tab-icon-wrap"><span>⚙️</span></div>
+        <div class="tab-name">Instellingen</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-switcher">
+    <button class="demo-btn active" onclick="switchTab('water')">💧 Water</button>
+    <button class="demo-btn" onclick="switchTab('calendar')">📅 Kalender</button>
+    <button class="demo-btn" onclick="switchTab('plants')">🌿 Planten</button>
+    <button class="demo-btn" onclick="switchTab('settings')">⚙️ Instellingen</button>
+  </div>
+</div>
+
+<script>
+function switchTab(tab) {
+  // Hide all screens
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('visible'));
+  document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.demo-btn').forEach(b => b.classList.remove('active'));
+
+  // Show selected
+  document.getElementById('screen-' + tab).classList.add('visible');
+  document.getElementById('tab-' + tab).classList.add('active');
+
+  // Update demo buttons
+  const btns = document.querySelectorAll('.demo-btn');
+  const map = ['water','calendar','plants','settings'];
+  btns[map.indexOf(tab)].classList.add('active');
+}
+</script>
+</body>
+</html>

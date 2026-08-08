@@ -11,14 +11,16 @@ const MESSAGES = {
     recentWatering: "No watering needed — you watered recently and the soil should still be moist.",
     weeklyRain: "No watering needed — accumulated rainfall this week has adequately moistened the soil.",
     upcomingRain: "No watering needed — enough rain is expected in the coming days.",
+    negligibleDeficit: "No watering needed — the remaining water deficit is negligible.",
     waterNeeded: (min: number) =>
       `Rain is not sufficient this week. Watering recommended: about ${min} min per m².`,
   },
   nl: {
-    recentRain: "Geen besproeïng nodig — de grond is waarschijnlijk nog nat van de recente regen.",
-    recentWatering: "Geen besproeïng nodig — je hebt recent gesproeid en de grond zou nog vochtig moeten zijn.",
-    weeklyRain: "Geen besproeïng nodig — de neerslag deze week heeft de grond voldoende bevochtigd.",
-    upcomingRain: "Geen besproeïng nodig — er wordt de komende dagen voldoende regen verwacht.",
+    recentRain: "Geen besproeiing nodig — de grond is waarschijnlijk nog nat van de recente regen.",
+    recentWatering: "Geen besproeiing nodig — je hebt recent gesproeid en de grond zou nog vochtig moeten zijn.",
+    weeklyRain: "Geen besproeiing nodig — de neerslag deze week heeft de grond voldoende bevochtigd.",
+    upcomingRain: "Geen besproeiing nodig — er wordt de komende dagen voldoende regen verwacht.",
+    negligibleDeficit: "Geen besproeiing nodig — het resterende vochttekort is verwaarloosbaar.",
     waterNeeded: (min: number) =>
       `Te weinig regen deze week. Sproeien aanbevolen: ongeveer ${min} min per m².`,
   },
@@ -27,6 +29,7 @@ const MESSAGES = {
   recentWatering: string;
   weeklyRain: string;
   upcomingRain: string;
+  negligibleDeficit: string;
   waterNeeded: (min: number) => string;
 }>;
 
@@ -38,7 +41,11 @@ export const DRY_DAY_THRESHOLD = 1; // mm
 
 // Assumed watering application rate for converting mm deficit → minutes.
 // 7.5 L/min per m² based on measured hose output of 2L per 16s.
-export const WATERING_RATE_L_PER_MIN = 15; // L/min per m²
+export const WATERING_RATE_L_PER_MIN = 7.5; // L/min per m²
+
+// Water applied per user-marked watering session (mm ≈ L/m²). Counted toward
+// the weekly budget so a session two days ago still reduces today's deficit.
+export const ASSUMED_WATERING_MM = 10;
 
 // "Soil likely still wet" gates (tweakable). Scaled by seasonFactor at runtime.
 export const WET_48H_MM = 3; // mm in last 2 days
@@ -51,15 +58,65 @@ export const MIN_DAYS_BETWEEN_WATERING = 2; // days
 
 // ---------- Plant watering categories ----------
 
+// multiplier ~ FAO crop coefficient plus a margin for shallow-rooted crops;
+// soilIndependent: potting soil is unrelated to the garden's soil type.
 export const CATEGORIES = {
-  vegetable: { multiplier: 1.75, rainEfficiency: 1.0 },
-  border:    { multiplier: 1.0,  rainEfficiency: 1.0 },
-  drought:   { multiplier: 0.35, rainEfficiency: 1.0 },
-  trees:     { multiplier: 0.1,  rainEfficiency: 1.0 },
-  pots:      { multiplier: 1.5,  rainEfficiency: 0.4 },
+  vegetable: { multiplier: 1.35, rainEfficiency: 1.0, soilIndependent: false },
+  border:    { multiplier: 1.0,  rainEfficiency: 1.0, soilIndependent: false },
+  drought:   { multiplier: 0.35, rainEfficiency: 1.0, soilIndependent: false },
+  trees:     { multiplier: 0.1,  rainEfficiency: 1.0, soilIndependent: false },
+  pots:      { multiplier: 1.5,  rainEfficiency: 0.4, soilIndependent: true },
 } as const;
 
 export type CategoryKey = keyof typeof CATEGORIES;
+
+/** Per-category params for calculateWateringAdvice, with the garden soil
+ *  multiplier neutralised for categories that don't grow in garden soil. */
+export function getCategoryAdviceParams(key: CategoryKey, soilMultiplier: number) {
+  const { multiplier, rainEfficiency, soilIndependent } = CATEGORIES[key];
+  return {
+    weeklyTargetMultiplier: multiplier,
+    rainEfficiency,
+    soilMultiplier: soilIndependent ? 1.0 : soilMultiplier,
+  };
+}
+
+/**
+ * Auto-detect watering category from plant fields.
+ * Priority: inPot > tree cycle > low maintenance > annual/biennial > border (default).
+ */
+export function detectWaterCategory(plant: {
+  inPot?: boolean | null;
+  cycle?: string | null;
+  maintenance?: string | null;
+}): CategoryKey {
+  if (plant.inPot) return "pots";
+  const cycle = (plant.cycle ?? "").toLowerCase();
+  const maintenance = (plant.maintenance ?? "").toLowerCase();
+  if (cycle.includes("tree")) return "trees";
+  if (maintenance === "low") return "drought";
+  if (cycle.includes("annual") || cycle.includes("biennial")) return "vegetable";
+  return "border";
+}
+
+// ---------- Soil types ----------
+
+// Multipliers on the weekly water target per soil type: sandy soil drains
+// faster (needs more water), clay and peat retain moisture (need less).
+export const SOIL_MULTIPLIERS = {
+  unknown: 1.0,
+  sandy: 1.3,
+  loamy: 1.0,
+  clay: 0.7,
+  chalky: 1.1,
+  peat: 0.6,
+} as const;
+
+export type SoilType = keyof typeof SOIL_MULTIPLIERS;
+
+export function getSoilMultiplier(soilType: string | null | undefined): number {
+  return SOIL_MULTIPLIERS[(soilType ?? "unknown") as SoilType] ?? 1.0;
+}
 
 // Seasonality fallback (used when no temperature data available).
 export function getSeasonFactor(date = new Date()): number {
@@ -140,6 +197,43 @@ const safeNum = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
+/** Forecast day rain for decision-making: probability-weighted amount when
+ *  available (expectedRainMm), otherwise the raw forecast amount. */
+export function expectedRainMm(day: { rainMm?: number; expectedRainMm?: number } | null | undefined): number {
+  return safeNum(day?.expectedRainMm ?? day?.rainMm);
+}
+
+/**
+ * Pick the best day to water: the start of the longest consecutive stretch of
+ * dry days (< DRY_DAY_THRESHOLD mm) in the forecast. Watering at the start of
+ * a long dry spell keeps the soil moist for as long as possible. Ties go to
+ * the earlier stretch; if no dry day exists, falls back to the first forecast day.
+ */
+export function pickBestDryDay(
+  forecast: Array<{ date: Date | string | null; rainMm: number; expectedRainMm?: number }>,
+): Date | string | null {
+  if (!Array.isArray(forecast) || forecast.length === 0) return null;
+  let bestStart = -1;
+  let bestLen = 0;
+  let curStart = -1;
+  let curLen = 0;
+  for (let i = 0; i < forecast.length; i++) {
+    if (expectedRainMm(forecast[i]) < DRY_DAY_THRESHOLD) {
+      if (curLen === 0) curStart = i;
+      curLen++;
+      if (curLen > bestLen) {
+        bestLen = curLen;
+        bestStart = curStart;
+      }
+    } else {
+      curLen = 0;
+    }
+  }
+  return bestStart >= 0
+    ? forecast[bestStart]?.date ?? null
+    : forecast[0]?.date ?? null;
+}
+
 /**
  * Calculate watering advice based on recent and upcoming rain.
  *
@@ -148,9 +242,13 @@ const safeNum = (v: unknown): number => {
  * - rainLast2Days / rainLast3Days: recent rain totals to model soil wetness
  * - rainLast5Days: total mm over last 5 days
  * - maxDailyRainLast7: max single-day rain in last 7 days
- * - rainNext3: total mm expected over the next 3 days
- * - dailyForecastNext5: [{ date, rainMm }] for the next ~5 days
+ * - rainNext3: total mm expected over the next 3 days (callers should pass the
+ *   probability-weighted total so uncertain rain doesn't fully count)
+ * - dailyForecastNext5: [{ date, rainMm, expectedRainMm? }] for the next ~5 days;
+ *   expectedRainMm (probability-weighted) is preferred for decisions when present
  * - lastWateredDate: Date | null (optional, from user history)
+ * - wateringDaysLast7: number of user-marked watering days in the 7 days before
+ *   the reference day — each counts ASSUMED_WATERING_MM toward the weekly budget
  * - tempLast7: [{ date, tmax, tmin }] — if provided with latitude, drives ET₀-based weeklyTarget
  * - tempNext5: [{ date, tmax, tmin }] — forecast temps; when hotter than last 7 days, raises weeklyTarget
  * - latitude: decimal degrees — required to use ET₀-based target
@@ -164,6 +262,8 @@ export function calculateWateringAdvice({
   rainNext3,
   dailyForecastNext5,
   lastWateredDate = null,
+  wateringDaysLast7 = 0,
+  referenceDate = null,
   tempLast7 = [],
   tempNext5 = [],
   latitude = null,
@@ -179,8 +279,10 @@ export function calculateWateringAdvice({
   rainLast5Days?: number;
   maxDailyRainLast7?: number;
   rainNext3: number;
-  dailyForecastNext5: Array<{ date: Date | string | null; rainMm: number }>;
+  dailyForecastNext5: Array<{ date: Date | string | null; rainMm: number; expectedRainMm?: number }>;
   lastWateredDate?: Date | null;
+  wateringDaysLast7?: number;
+  referenceDate?: Date | null;
   tempLast7?: Array<{ date: Date; tmax: number; tmin: number }>;
   tempNext5?: Array<{ date: Date; tmax: number; tmin: number }>;
   latitude?: number | null;
@@ -215,19 +317,28 @@ export function calculateWateringAdvice({
   const baseWeeklyTarget = Math.max(backwardTarget, forwardTarget);
   const weeklyTarget = baseWeeklyTarget * weeklyTargetMultiplier * soilMultiplier * sensitivityFactor;
 
-  // Derive effective season factor from the actual weekly target so wet-soil gates work
-  // correctly in both hemispheres and for any climate (not just Northern Hemisphere months).
-  const effectiveSeasonFactor = weeklyTarget / WEEKLY_TARGET;
+  // Wet-soil gate scaling: how fast soil dries depends on climate (ET₀) and soil
+  // type, but NOT on how much a plant category demands or on the user's
+  // sensitivity slider — those only scale the weekly target, never "is the
+  // soil wet". This keeps gates correct in both hemispheres (high ET₀ = high
+  // factor regardless of calendar month).
+  const wetGateFactor = (baseWeeklyTarget * soilMultiplier) / WEEKLY_TARGET;
 
-  const weeklyRainCoverage = _rainLast7 + _rainNext3;
+  // Water the user applied themselves counts toward the weekly budget, so a
+  // session earlier this week keeps reducing the deficit after the cooldown.
+  const wateringContribution = Math.max(0, safeNum(wateringDaysLast7)) * ASSUMED_WATERING_MM;
+  const suppliedLast7 = _rainLast7 + wateringContribution;
+  const weeklyRainCoverage = suppliedLast7 + _rainNext3;
   const deficitLitersPerM2 = Math.max(0, weeklyTarget - weeklyRainCoverage);
   const deficitMinutesPerM2 = Math.round(deficitLitersPerM2 / WATERING_RATE_L_PER_MIN);
 
   // --- Helper: days since last watering ---
   const daysSinceLastWatering = (() => {
     if (!(lastWateredDate instanceof Date) || Number.isNaN(lastWateredDate.getTime())) return null;
-    const now = new Date();
-    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const ref = (referenceDate instanceof Date && !Number.isNaN(referenceDate.getTime()))
+      ? referenceDate
+      : new Date();
+    const startToday = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
     const startLast = new Date(
       lastWateredDate.getFullYear(),
       lastWateredDate.getMonth(),
@@ -247,18 +358,16 @@ export function calculateWateringAdvice({
     rainNext3: _rainNext3,
     dailyForecastNext5: forecast,
     daysSinceLastWatering,
+    wateringContribution,
     seasonFactor,
     weeklyTarget,
   };
 
   // --- 0) Wet-soil gate: recent rain means no watering ---
-  // Thresholds scale with effectiveSeasonFactor derived from the actual weeklyTarget.
-  // This is globally correct: a hot Sydney summer gives a high factor regardless of
-  // calendar month, and a cold July anywhere gives a low factor automatically.
-  const scaledWet48hMm = WET_48H_MM * effectiveSeasonFactor;
-  const scaledWet72hMm = WET_72H_MM * effectiveSeasonFactor;
-  const scaledWet5dMm = WET_5D_MM * effectiveSeasonFactor;
-  const scaledBigRainDayMm = BIG_RAIN_DAY_MM * effectiveSeasonFactor;
+  const scaledWet48hMm = WET_48H_MM * wetGateFactor;
+  const scaledWet72hMm = WET_72H_MM * wetGateFactor;
+  const scaledWet5dMm = WET_5D_MM * wetGateFactor;
+  const scaledBigRainDayMm = BIG_RAIN_DAY_MM * wetGateFactor;
 
   if (
     _rainLast2 >= scaledWet48hMm ||
@@ -294,15 +403,21 @@ export function calculateWateringAdvice({
 
   // --- 1) Weekly target logic ---
   let shouldWater = false;
-  let noWaterReason: "recent_rain" | "upcoming_rain" | "recent_watering" | null = null;
+  let noWaterReason:
+    | "recent_rain"
+    | "upcoming_rain"
+    | "recent_watering"
+    | "weekly_rain"
+    | "negligible_deficit"
+    | null = null;
   let bestWateringDate: Date | string | null = null;
   let message = "";
 
-  // 80% of weekly target from rain alone is sufficient: the small remaining deficit is within
-  // the soil's moisture buffer, especially with low evapotranspiration in cool weather.
-  if (_rainLast7 >= weeklyTarget * 0.8) {
+  // 80% of weekly target from rain + own watering is sufficient: the small remaining
+  // deficit is within the soil's moisture buffer, especially with low evapotranspiration.
+  if (suppliedLast7 >= weeklyTarget * 0.8) {
     shouldWater = false;
-    noWaterReason = "recent_rain";
+    noWaterReason = "weekly_rain";
     message = msg.weeklyRain;
   } else if (weeklyRainCoverage >= weeklyTarget) {
     shouldWater = false;
@@ -311,15 +426,14 @@ export function calculateWateringAdvice({
   } else if (deficitMinutesPerM2 === 0) {
     // Deficit exists but rounds to 0 minutes — not worth watering.
     shouldWater = false;
-    noWaterReason = "recent_rain";
-    message = msg.weeklyRain;
+    noWaterReason = "negligible_deficit";
+    message = msg.negligibleDeficit;
   } else {
     shouldWater = true;
     noWaterReason = null;
 
-    // Pick earliest "dry" day in next 5 days
-    const dryDay = forecast.find((day) => safeNum(day?.rainMm) < DRY_DAY_THRESHOLD);
-    bestWateringDate = dryDay?.date ?? forecast[0]?.date ?? null;
+    // Water at the start of the longest dry stretch in the forecast.
+    bestWateringDate = pickBestDryDay(forecast);
 
     message = msg.waterNeeded(deficitMinutesPerM2);
   }

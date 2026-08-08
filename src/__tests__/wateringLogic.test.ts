@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   calculateWateringAdvice,
+  pickBestDryDay,
   getSeasonFactor,
   computeRa,
   computeDailyET0,
@@ -12,6 +13,10 @@ import {
   BIG_RAIN_DAY_MM,
   MIN_DAYS_BETWEEN_WATERING,
   DRY_DAY_THRESHOLD,
+  WATERING_RATE_L_PER_MIN,
+  ASSUMED_WATERING_MM,
+  CATEGORIES,
+  getCategoryAdviceParams,
 } from "@shared/wateringLogic";
 
 // Helper: build a minimal forecast array
@@ -293,15 +298,16 @@ describe("calculateWateringAdvice", () => {
       // weeklyTarget = 24 in July; 80% = 19.2mm; use 20mm
       const result = calculateWateringAdvice(dryInputs({ rainLast7: 20 }));
       expect(result.shouldWater).toBe(false);
-      expect(result.noWaterReason).toBe("recent_rain");
+      expect(result.noWaterReason).toBe("weekly_rain");
       expect(result.message).toContain("adequately moistened");
     });
 
     it("recommends watering when rainLast7 < 80% of weekly target (no forecast)", () => {
-      // weeklyTarget = 24 in July; 80% = 19.2mm; use 10mm → deficit = 14mm → ~1 min → should water
-      // (with WATERING_RATE_L_PER_MIN = 15, deficit must be >= 7.5mm to round to ≥ 1 min)
+      // weeklyTarget = 24 in July; 80% = 19.2mm; use 10mm → deficit = 14mm → ~2 min → should water
+      // (with WATERING_RATE_L_PER_MIN = 7.5, deficit must be >= 3.75mm to round to ≥ 1 min)
       const result = calculateWateringAdvice(dryInputs({ rainLast7: 10 }));
       expect(result.shouldWater).toBe(true);
+      expect(result.deficitMinutesPerM2).toBe(Math.round(14 / WATERING_RATE_L_PER_MIN)); // = 2
     });
 
     it("says no watering needed when rainLast7 + rainNext3 meets target", () => {
@@ -334,11 +340,11 @@ describe("calculateWateringAdvice", () => {
   });
 
   describe("best watering day selection", () => {
-    it("picks the first dry day from the forecast", () => {
+    it("picks the first dry day when it starts the longest dry stretch", () => {
       const forecast = makeForecast([
         { daysFromNow: 0, rainMm: 5 },  // rainy
         { daysFromNow: 1, rainMm: 3 },  // rainy
-        { daysFromNow: 2, rainMm: 0 },  // dry ← should pick this
+        { daysFromNow: 2, rainMm: 0 },  // dry ← starts longest stretch
         { daysFromNow: 3, rainMm: 0 },
         { daysFromNow: 4, rainMm: 0 },
       ]);
@@ -386,6 +392,86 @@ describe("calculateWateringAdvice", () => {
       const bestDate = new Date(result.bestWateringDate as Date);
       expect(bestDate.toDateString()).toBe(forecast[1].date.toDateString());
     });
+
+    it("skips an early short dry stretch in favour of a later longer one", () => {
+      const forecast = makeForecast([
+        { daysFromNow: 0, rainMm: 0 },  // dry, but stretch of 1
+        { daysFromNow: 1, rainMm: 4 },  // rainy
+        { daysFromNow: 2, rainMm: 0 },  // dry ← starts stretch of 3
+        { daysFromNow: 3, rainMm: 0 },
+        { daysFromNow: 4, rainMm: 0 },
+      ]);
+
+      const result = calculateWateringAdvice(
+        dryInputs({ dailyForecastNext5: forecast })
+      );
+      expect(result.shouldWater).toBe(true);
+
+      const bestDate = new Date(result.bestWateringDate as Date);
+      expect(bestDate.toDateString()).toBe(forecast[2].date.toDateString());
+    });
+
+    it("breaks stretch-length ties in favour of the earlier stretch", () => {
+      const forecast = makeForecast([
+        { daysFromNow: 0, rainMm: 0 },  // dry ← stretch of 2, earlier
+        { daysFromNow: 1, rainMm: 0 },
+        { daysFromNow: 2, rainMm: 4 },  // rainy
+        { daysFromNow: 3, rainMm: 0 },  // dry, stretch of 2
+        { daysFromNow: 4, rainMm: 0 },
+      ]);
+
+      const result = calculateWateringAdvice(
+        dryInputs({ dailyForecastNext5: forecast })
+      );
+      expect(result.shouldWater).toBe(true);
+
+      const bestDate = new Date(result.bestWateringDate as Date);
+      expect(bestDate.toDateString()).toBe(forecast[0].date.toDateString());
+    });
+  });
+
+  describe("pickBestDryDay", () => {
+    it("returns null for an empty forecast", () => {
+      expect(pickBestDryDay([])).toBeNull();
+    });
+
+    it("returns the first day when every day is rainy", () => {
+      const forecast = makeForecast([
+        { daysFromNow: 0, rainMm: 5 },
+        { daysFromNow: 1, rainMm: 3 },
+      ]);
+      expect(pickBestDryDay(forecast)).toBe(forecast[0].date);
+    });
+
+    it("returns the start of the longest dry stretch", () => {
+      const forecast = makeForecast([
+        { daysFromNow: 0, rainMm: 0 },
+        { daysFromNow: 1, rainMm: 4 },
+        { daysFromNow: 2, rainMm: 0 },
+        { daysFromNow: 3, rainMm: 0 },
+      ]);
+      expect(pickBestDryDay(forecast)).toBe(forecast[2].date);
+    });
+
+    it("prefers probability-weighted rain (expectedRainMm) over raw rainMm", () => {
+      // Raw forecast says day 0 is wet, but at 10% probability the expected
+      // amount is 0.5mm — below DRY_DAY_THRESHOLD, so day 0 counts as dry.
+      const forecast = makeForecast([
+        { daysFromNow: 0, rainMm: 5 },
+        { daysFromNow: 1, rainMm: 0 },
+      ]);
+      forecast[0].expectedRainMm = 0.5;
+      expect(pickBestDryDay(forecast)).toBe(forecast[0].date);
+    });
+
+    it("treats a likely shower as wet even when expectedRainMm is present", () => {
+      const forecast = makeForecast([
+        { daysFromNow: 0, rainMm: 5 },
+        { daysFromNow: 1, rainMm: 0 },
+      ]);
+      forecast[0].expectedRainMm = 4.5; // 90% chance of 5mm
+      expect(pickBestDryDay(forecast)).toBe(forecast[1].date);
+    });
   });
 
   describe("debug fields", () => {
@@ -430,6 +516,75 @@ describe("calculateWateringAdvice", () => {
       const result = calculateWateringAdvice(dryInputs({ dailyForecastNext5: [] }));
       expect(result.shouldWater).toBe(true);
       expect(result.bestWateringDate).toBeNull();
+    });
+  });
+
+  describe("own watering counts toward weekly budget (wateringDaysLast7)", () => {
+    it("adds ASSUMED_WATERING_MM per session to the supplied water", () => {
+      // weeklyTarget = 24; rain 5mm + 2 sessions × 10mm = 25mm ≥ 80% → no watering
+      const result = calculateWateringAdvice(
+        dryInputs({ rainLast7: 5, wateringDaysLast7: 2 })
+      );
+      expect(result.shouldWater).toBe(false);
+      expect(result.noWaterReason).toBe("weekly_rain");
+    });
+
+    it("reduces the deficit after the cooldown has passed", () => {
+      // Watered 3 days ago (cooldown over): deficit = 24 − (0 + 10) = 14, not 24
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+      const result = calculateWateringAdvice(
+        dryInputs({ lastWateredDate: threeDaysAgo, wateringDaysLast7: 1 })
+      );
+      expect(result.shouldWater).toBe(true);
+      expect(result.deficitLitersPerM2).toBe(24 - ASSUMED_WATERING_MM);
+    });
+
+    it("defaults to 0 sessions (unchanged behaviour)", () => {
+      const result = calculateWateringAdvice(dryInputs());
+      expect(result.deficitLitersPerM2).toBe(24);
+    });
+  });
+
+  describe("wet-soil gates ignore plant demand and sensitivity", () => {
+    it("does not shrink gates for low-demand categories (trees)", () => {
+      // With the old scaling (× weeklyTarget/WEEKLY_TARGET incl. multiplier 0.1),
+      // 1mm in 2 days would trigger the gate (3 × 0.12 = 0.36). Now the gate stays
+      // at 3 × 1.2 = 3.6mm, so 1mm must NOT report "recent_rain".
+      const result = calculateWateringAdvice(
+        dryInputs({ rainLast2Days: 1, weeklyTargetMultiplier: 0.1 })
+      );
+      expect(result.noWaterReason).not.toBe("recent_rain");
+    });
+
+    it("does not inflate gates for high-demand categories (vegetables)", () => {
+      // Gate = 3 × 1.2 = 3.6mm regardless of multiplier; 4mm in 2 days blocks watering
+      const result = calculateWateringAdvice(
+        dryInputs({ rainLast2Days: 4, weeklyTargetMultiplier: CATEGORIES.vegetable.multiplier })
+      );
+      expect(result.shouldWater).toBe(false);
+      expect(result.noWaterReason).toBe("recent_rain");
+    });
+
+    it("still scales gates with soil type (sandy dries faster)", () => {
+      // Sandy (1.3): gate = 3 × 1.2 × 1.3 = 4.68mm → 4mm does NOT trigger it
+      const result = calculateWateringAdvice(
+        dryInputs({ rainLast2Days: 4, soilMultiplier: 1.3 })
+      );
+      expect(result.noWaterReason).not.toBe("recent_rain");
+    });
+  });
+
+  describe("getCategoryAdviceParams", () => {
+    it("neutralises the garden soil multiplier for pots", () => {
+      expect(getCategoryAdviceParams("pots", 1.3).soilMultiplier).toBe(1.0);
+      expect(getCategoryAdviceParams("pots", 1.3).rainEfficiency).toBe(0.4);
+    });
+
+    it("passes the soil multiplier through for in-ground categories", () => {
+      expect(getCategoryAdviceParams("border", 1.3).soilMultiplier).toBe(1.3);
+      expect(getCategoryAdviceParams("vegetable", 0.7).soilMultiplier).toBe(0.7);
+      expect(getCategoryAdviceParams("vegetable", 1.0).weeklyTargetMultiplier).toBe(1.35);
     });
   });
 

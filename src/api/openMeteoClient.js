@@ -40,11 +40,13 @@ export async function fetchRainHistory(lat, lon, signal) {
 }
 
 /**
- * Fetch daily rainfall history (mm) for the past N days.
- * Returns: [{ date: Date, rainMm: number }]
+ * Fetch daily rainfall history (mm) for the past N days, plus today's nowcast.
+ * forecast_days=1 adds today's *measured* precipitation so the calendar can show
+ * rain that already fell this morning even when the forecast said dry.
+ * Returns: [{ date: Date, rainMm: number, cloudCoverMean: number|null }]
  */
 export async function fetchDailyRainHistory(lat, lon, pastDays = 30, signal) {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=${pastDays}&forecast_days=0&daily=precipitation_sum&timezone=auto`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&past_days=${pastDays}&forecast_days=1&daily=precipitation_sum,cloud_cover_mean&timezone=auto`;
 
   const res = await fetch(url, { signal });
   if (!res.ok) {
@@ -54,9 +56,11 @@ export async function fetchDailyRainHistory(lat, lon, pastDays = 30, signal) {
   const data = await res.json();
   const dates = data.daily?.time ?? [];
   const rain = data.daily?.precipitation_sum ?? [];
+  const cloud = data.daily?.cloud_cover_mean ?? [];
 
   return dates.map((d, i) => ({
     date: new Date(`${d}T00:00:00`),
     rainMm: typeof rain[i] === "number" ? rain[i] : 0,
+    cloudCoverMean: typeof cloud[i] === "number" ? cloud[i] : null,
   }));
 }

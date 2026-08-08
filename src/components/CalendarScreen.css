@@ -9,7 +9,7 @@
 /* ── Header ── */
 .cal-header {
   background: linear-gradient(160deg, #1a3d1a 0%, #2d5a2d 40%, #3d7a3d 100%);
-  padding: 40px 28px 28px;
+  padding: calc(40px + var(--safe-top)) 28px 28px;
   position: relative;
   overflow: hidden;
 }

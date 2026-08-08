@@ -9,7 +9,7 @@
 /* ── Hero header ── */
 .best-hero {
   background: linear-gradient(160deg, #1a3d1a 0%, #2d5a2d 40%, #3d7a3d 100%);
-  padding: 52px 28px 44px;
+  padding: calc(52px + var(--safe-top)) 28px 44px;
   position: relative;
   overflow: hidden;
   min-height: 280px;
@@ -191,6 +191,34 @@
   flex: 1;
 }
 
+.best-no-location {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 40px 24px 24px;
+  gap: 8px;
+}
+
+.best-no-location-icon {
+  font-size: 40px;
+  margin-bottom: 8px;
+}
+
+.best-no-location-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2d5a2d;
+  margin: 0;
+}
+
+.best-no-location-sub {
+  font-size: 14px;
+  color: #6a8a64;
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
 .best-loading {
   text-align: center;
   color: #6a8a64;
@@ -347,6 +375,11 @@
 }
 
 .best-cat-card {
+  /* Rendered as a real <button> for keyboard/screen-reader support — reset button defaults */
+  border: none;
+  font: inherit;
+  text-align: left;
+  width: 100%;
   background: #ffffff;
   border-radius: 16px;
   padding: 12px 16px;
@@ -580,6 +613,84 @@
   color: #3a5a34;
   line-height: 1.6;
   margin: 0;
+}
+
+/* ── "Why this advice?" breakdown ── */
+.best-why {
+  margin-bottom: 20px;
+}
+
+.best-why-toggle {
+  background: none;
+  border: none;
+  padding: 0 4px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #3d7a3d;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.best-why-chevron {
+  font-size: 11px;
+}
+
+.best-why-heading {
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #9aab94;
+  padding: 14px 20px 0;
+}
+
+.best-why-panel {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-top: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* Inside the category sheet the panel sits on the sheet background — no card chrome */
+.best-cat-sheet .best-why-panel {
+  box-shadow: none;
+  margin-top: 0;
+  padding: 8px 20px 4px;
+  border-radius: 0;
+}
+
+.best-why-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 14px;
+  color: #3a5a34;
+}
+
+.best-why-value {
+  font-variant-numeric: tabular-nums;
+  color: #1a3d1a;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.best-why-row--total {
+  border-top: 1px solid #e8f0e5;
+  margin-top: 6px;
+  padding-top: 8px;
+  font-weight: 700;
+  color: #1a3d1a;
+}
+
+.best-why-note {
+  font-size: 13px;
+  color: #6a8a64;
+  line-height: 1.5;
+  margin-top: 8px;
 }
 
 /* ── "Add plants" prompt (shown when no plants added yet) ── */

@@ -157,6 +157,10 @@ export default function LocationPicker({ locationName, onLocationChange, lang = 
               setTimeout(() => setIsDropdownOpen(false), 150);
             }}
             className="loc-input"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
           />
 
           {(isSearching || searchError) && (

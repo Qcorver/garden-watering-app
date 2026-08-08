@@ -1,0 +1,71 @@
+.plant-illustration-png {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: bottom;
+  display: block;
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.12));
+}
+
+/* Blend weg de grijze achtergrond van bewolkt/regen varianten */
+.plant-illustration-png--blend {
+  mix-blend-mode: multiply;
+}
+
+/* ☀️ Gezond — rustige bounce */
+.plant-illustration-png--sunny.plant-illustration-png--healthy {
+  animation: plant-bounce 3s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+/* ☀️ Dorstig — droevige sway */
+.plant-illustration-png--sunny.plant-illustration-png--thirsty {
+  animation: plant-sway 3.5s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+/* ☁️ Gezond — langzame float */
+.plant-illustration-png--cloudy.plant-illustration-png--healthy {
+  animation: plant-float 4s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+/* ☁️ Dorstig — zware sway */
+.plant-illustration-png--cloudy.plant-illustration-png--thirsty {
+  animation: plant-sway 4s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+/* 🌧️ Gezond — lichte schudder */
+.plant-illustration-png--rain.plant-illustration-png--healthy {
+  animation: plant-rain-sway 2.5s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+/* 🌧️ Dorstig — zware schudder */
+.plant-illustration-png--rain.plant-illustration-png--thirsty {
+  animation: plant-sway 3s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+@keyframes plant-bounce {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  50%       { transform: translateY(-4px) scaleY(1.02); }
+}
+
+@keyframes plant-float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-3px); }
+}
+
+@keyframes plant-sway {
+  0%, 100% { transform: rotate(0deg); }
+  25%       { transform: rotate(-2deg); }
+  75%       { transform: rotate(2deg); }
+}
+
+@keyframes plant-rain-sway {
+  0%, 100% { transform: rotate(0deg); }
+  30%       { transform: rotate(-1.5deg); }
+  70%       { transform: rotate(1deg); }
+}

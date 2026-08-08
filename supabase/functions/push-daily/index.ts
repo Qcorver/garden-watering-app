@@ -1,6 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { calculateWateringAdvice } from "../_shared/wateringLogic.ts";
+import {
+  calculateWateringAdvice,
+  detectWaterCategory,
+  getSoilMultiplier,
+  getCategoryAdviceParams,
+} from "../_shared/wateringLogic.ts";
 
 /**
  * push-daily (scheduled sender)
@@ -177,7 +182,7 @@ function withinWindow(nowMin: number, targetMin: number, windowMin: number): boo
 // ---------- weather data ----------
 async function fetchRainData(lat: number, lon: number) {
   const url =
-    `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min&timezone=auto&past_days=7&forecast_days=5`;
+    `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&daily=precipitation_sum,precipitation_probability_mean,temperature_2m_max,temperature_2m_min&timezone=auto&past_days=7&forecast_days=5`;
 
   const r = await fetch(url);
   if (!r.ok) throw new Error(`Open-Meteo error: ${r.status} ${await r.text()}`);
@@ -186,6 +191,8 @@ async function fetchRainData(lat: number, lon: number) {
   const timezone: string = j?.timezone ?? "UTC";
   const times: string[] = j?.daily?.time ?? [];
   const sums: number[] = (j?.daily?.precipitation_sum ?? []).map((v: any) => Number(v) || 0);
+  // Probability (0–100) is only meaningful for forecast days; null for past days.
+  const probs: (number | null)[] = j?.daily?.precipitation_probability_mean ?? [];
   const tmaxArr: (number | null)[] = j?.daily?.temperature_2m_max ?? [];
   const tminArr: (number | null)[] = j?.daily?.temperature_2m_min ?? [];
 
@@ -196,7 +203,14 @@ async function fetchRainData(lat: number, lon: number) {
   const histStart = Math.max(0, todayIdx - 7);
   const past7 = sums.slice(histStart, todayIdx);
   const next5 = sums.slice(todayIdx, todayIdx + 5);
-  const next3 = next5.slice(0, 3);
+
+  // Probability-weight forecast rain so uncertain showers don't fully count
+  // toward the watering budget. Missing probability → full weight.
+  const expectedNext5 = next5.map((mm, i) => {
+    const p = probs[todayIdx + i];
+    return typeof p === "number" ? mm * Math.max(0, Math.min(100, p)) / 100 : mm;
+  });
+  const expectedNext3 = expectedNext5.slice(0, 3);
 
   // Include today's accumulated precipitation in the wet-soil gates so that
   // rain falling right now (e.g. morning before the 10:00 push) prevents a
@@ -222,10 +236,11 @@ async function fetchRainData(lat: number, lon: number) {
     rainLast3Days: sum(past7.slice(-2)) + todayMm,
     rainLast2Days: sum(past7.slice(-1)) + todayMm,
     maxDailyRainLast7: past7.length > 0 ? Math.max(todayMm, ...past7) : todayMm,
-    rainNext3: sum(next3),
+    rainNext3: sum(expectedNext3),
     forecastDays: next5.map((mm, i) => ({
       date: times[todayIdx + i] ?? null,
       mm,
+      expectedMm: expectedNext5[i],
     })),
     tempLast7,
   };
@@ -259,6 +274,20 @@ async function sendFcm(
 
   const json = await res.json().catch(() => ({}));
   return { ok: res.ok, status: res.status, json };
+}
+
+// ---------- timezone helpers ----------
+function getLocalDateString(date: Date, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+  } catch {
+    return date.toISOString().slice(0, 10);
+  }
 }
 
 // ---------- timezone helpers for pruning ----------
@@ -374,10 +403,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 2) preferences (push_enabled + lang)
+    // 2) preferences (push_enabled + lang + watering settings)
     const { data: prefsRows, error: prefsError } = await supabase
       .from("user_preferences")
-      .select("user_id,push_enabled,lang")
+      .select("user_id,push_enabled,lang,soil_type,sensitivity")
       .in("user_id", userIds)
       .eq("push_enabled", true);
 
@@ -391,20 +420,46 @@ Deno.serve(async (req) => {
 
     if (locError) throw locError;
 
-    // 4) garden plants (for pruning notifications on the 1st of the month)
+    // 4) garden plants (pruning notifications + per-category watering advice)
     const { data: plantRows, error: plantError } = await supabase
       .from("garden_plants")
-      .select("user_id,common_name,pruning_months")
+      .select("user_id,common_name,pruning_months,cycle,maintenance,in_pot")
       .in("user_id", userIds);
 
     if (plantError) throw plantError;
 
-    const plantsByUser = new Map<string, Array<{ common_name: string; pruning_months: string[] }>>();
+    const plantsByUser = new Map<string, Array<{
+      common_name: string;
+      pruning_months: string[];
+      cycle: string | null;
+      maintenance: string | null;
+      in_pot: boolean;
+    }>>();
     for (const row of plantRows ?? []) {
       if (!plantsByUser.has(row.user_id)) plantsByUser.set(row.user_id, []);
       plantsByUser.get(row.user_id)!.push({
         common_name: row.common_name,
         pruning_months: row.pruning_months ?? [],
+        cycle: row.cycle ?? null,
+        maintenance: row.maintenance ?? null,
+        in_pot: row.in_pot ?? false,
+      });
+    }
+
+    // 4b) wishlist plants (for planting notifications on the 1st of the month)
+    const { data: wishlistRows, error: wishlistError } = await supabase
+      .from("wishlist_plants")
+      .select("user_id,common_name,planting_months")
+      .in("user_id", userIds);
+
+    if (wishlistError) throw wishlistError;
+
+    const wishlistByUser = new Map<string, Array<{ common_name: string; planting_months: string[] }>>();
+    for (const row of wishlistRows ?? []) {
+      if (!wishlistByUser.has(row.user_id)) wishlistByUser.set(row.user_id, []);
+      wishlistByUser.get(row.user_id)!.push({
+        common_name: row.common_name,
+        planting_months: row.planting_months ?? [],
       });
     }
 
@@ -421,12 +476,15 @@ Deno.serve(async (req) => {
 
     if (sessionError) throw sessionError;
 
-    // Most recent watered_on per user
+    // Most recent watered_on per user + all session dates (for the weekly budget)
     const lastWateredByUser = new Map<string, Date>();
+    const sessionDatesByUser = new Map<string, string[]>();
     for (const row of sessionRows ?? []) {
       const d = new Date(`${row.watered_on}T00:00:00`);
       const existing = lastWateredByUser.get(row.user_id);
       if (!existing || d > existing) lastWateredByUser.set(row.user_id, d);
+      if (!sessionDatesByUser.has(row.user_id)) sessionDatesByUser.set(row.user_id, []);
+      sessionDatesByUser.get(row.user_id)!.push(row.watered_on);
     }
 
     const prefsByUser = new Map((prefsRows ?? []).map((p: any) => [p.user_id, p]));
@@ -445,6 +503,7 @@ Deno.serve(async (req) => {
     let sent = 0;
     let skippedLegacy = 0;
     let pruningSent = 0;
+    let plantingSent = 0;
 
     const errors: Array<{ token: string; status: number; json: any }> = [];
 
@@ -516,7 +575,29 @@ Deno.serve(async (req) => {
           inWindow++;
 
           // ── Watering notification ────────────────────────────────────
-          const advice = calculateWateringAdvice({
+          // Same parameters as the app: soil type + sensitivity from
+          // user_preferences, and per-category advice derived from the
+          // user's garden plants (falls back to generic advice without plants).
+          const soilMultiplier = getSoilMultiplier(prefs.soil_type);
+          const sensitivityFactor = 1.0 + (Number(prefs.sensitivity) || 0) / 100;
+
+          const userPlants = plantsByUser.get(row.user_id) ?? [];
+          const categoryKeys = Array.from(new Set(
+            userPlants.map((p) => detectWaterCategory({
+              inPot: p.in_pot,
+              cycle: p.cycle,
+              maintenance: p.maintenance,
+            })),
+          ));
+
+          const todayLocalStr = getLocalDateString(now, rain.timezone);
+
+          // Watering sessions in the last 7 days, excluding today (today's
+          // session is handled by the cooldown gate) — same window as the app.
+          const wateringDaysLast7 = (sessionDatesByUser.get(row.user_id) ?? [])
+            .filter((d) => d < todayLocalStr).length;
+
+          const baseInputs = {
             rainLast7: rain.rainLast7,
             rainLast2Days: rain.rainLast2Days,
             rainLast3Days: rain.rainLast3Days,
@@ -526,30 +607,48 @@ Deno.serve(async (req) => {
             dailyForecastNext5: rain.forecastDays.map((d) => ({
               date: d.date ? new Date(d.date + "T00:00:00") : null,
               rainMm: d.mm,
+              expectedRainMm: d.expectedMm,
             })),
             tempLast7: rain.tempLast7,
             latitude: lat,
             lastWateredDate: lastWateredByUser.get(row.user_id) ?? null,
+            wateringDaysLast7,
             lang: userLang,
-          });
+            soilMultiplier,
+            sensitivityFactor,
+          };
 
-          if (advice.shouldWater) {
+          const adviceVariants = categoryKeys.length > 0
+            ? categoryKeys.map((key) => calculateWateringAdvice({
+                ...baseInputs,
+                ...getCategoryAdviceParams(key, soilMultiplier),
+              }))
+            : [calculateWateringAdvice(baseInputs)];
+
+          const toDateStr = (d: Date | string | null) => d instanceof Date
+            ? d.toISOString().slice(0, 10)
+            : (d ?? "");
+
+          // Notify when at least one of the user's plant categories should be
+          // watered today.
+          const triggering = adviceVariants.find(
+            (a) => a.shouldWater && toDateStr(a.bestWateringDate) === todayLocalStr,
+          );
+
+          if (triggering) {
             attempted++;
 
             const messageBody = userLang === "nl"
-              ? "Je tuin heeft vandaag water nodig — open de app om te zien welke planten"
-              : "Your garden needs water today — open the app to see which plants";
-            const notifTitle = userLang === "nl" ? "Tuin Bewatering" : title;
-            const bestDate = advice.bestWateringDate instanceof Date
-              ? advice.bestWateringDate.toISOString().slice(0, 10)
-              : (advice.bestWateringDate ?? "");
+              ? "Open de app om te zien welke planten water nodig hebben"
+              : "Open the app to see which plants need water";
+            const notifTitle = userLang === "nl" ? "Tijd om te sproeien!" : "Time to water!";
 
             if (!dryRun) {
               const r = await sendFcm(accessToken, tokenRaw, notifTitle, messageBody, {
                 kind: "daily",
                 sent_at: new Date().toISOString(),
                 timezone: rain.timezone,
-                best_watering_date: bestDate,
+                best_watering_date: todayLocalStr,
                 rain_last7_mm: rain.rainLast7.toFixed(1),
                 rain_next3_mm: rain.rainNext3.toFixed(1),
               });
@@ -572,22 +671,23 @@ Deno.serve(async (req) => {
             }
           }
 
-          // ── Pruning notification (1st of the month only) ─────────────
+          // ── Pruning + planting notifications (1st of the month only) ────
           const dayOfMonth = getDayOfMonthInTimezone(now, rain.timezone);
           if (dayOfMonth === 1) {
             // For SH users we look up the NH-equivalent month, because
-            // pruning_months are stored as NH calendar months from Perenual.
+            // pruning_months/planting_months are stored as NH calendar months.
             const nhMonthName = getNHEquivalentMonthName(now, rain.timezone, lat);
-            const userPlants = plantsByUser.get(row.user_id) ?? [];
+
+            // Pruning
             const plantsThisMonth = userPlants.filter(
               (p) => p.pruning_months.includes(nhMonthName),
             );
 
             if (plantsThisMonth.length > 0) {
-              const pruningTitle = userLang === "nl" ? "Snoeitijd!" : "Time to Prune!";
+              const pruningTitle = userLang === "nl" ? "Tijd om te snoeien!" : "Time to Prune!";
               const pruningBody = userLang === "nl"
-                ? "Tijd om te snoeien! Open de app om te zien welke planten gesnoeid kunnen worden."
-                : "Time to prune! Open the app to see which plants need pruning.";
+                ? "Open de app om te zien welke planten gesnoeid kunnen worden"
+                : "Open the app to see which plants need pruning";
 
               if (!dryRun) {
                 const pr = await sendFcm(
@@ -606,9 +706,39 @@ Deno.serve(async (req) => {
                 pruningSent++;
               }
             }
+
+            // Planting (wishlist)
+            const userWishlist = wishlistByUser.get(row.user_id) ?? [];
+            const wishlistThisMonth = userWishlist.filter(
+              (p) => p.planting_months.includes(nhMonthName),
+            );
+
+            if (wishlistThisMonth.length > 0) {
+              const plantingTitle = userLang === "nl" ? "Tijd om te planten!" : "Time to Plant!";
+              const plantingBody = userLang === "nl"
+                ? "Open de app om te zien welke planten de grond in kunnen"
+                : "Open the app to see which plants are ready to go in the ground";
+
+              if (!dryRun) {
+                const pl = await sendFcm(
+                  accessToken,
+                  tokenRaw,
+                  plantingTitle,
+                  plantingBody,
+                  {
+                    kind: "planting",
+                    sent_at: new Date().toISOString(),
+                    month: nhMonthName,
+                  },
+                );
+                if (pl.ok) plantingSent++;
+              } else {
+                plantingSent++;
+              }
+            }
           }
 
-          if (!advice.shouldWater) {
+          if (!triggering) {
             return { kind: "no_send", reason: "not_triggered" };
           }
 
@@ -633,6 +763,7 @@ Deno.serve(async (req) => {
         attempted,
         sent,
         pruning_sent: pruningSent,
+        planting_sent: plantingSent,
         skipped_legacy_apns: skippedLegacy,
         errors: errors.slice(0, 10),
       },

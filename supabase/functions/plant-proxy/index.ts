@@ -78,6 +78,7 @@ function toDetailsResult(row: Record<string, unknown>, lang: string, imageUrl: s
     common_name_nl: row.common_name_nl,
     scientific_name: [row.scientific_name],
     pruning_month: row.pruning_months ?? [],
+    planting_months: row.planting_months ?? [],
     sunlight: row.sunlight ?? [],
     cycle: row.cycle ?? null,
     maintenance: row.maintenance ?? null,
