@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { PruningScreen } from "./PruningScreen";
 import { WishlistScreen } from "./WishlistScreen";
+import { MoestuinScreen } from "./MoestuinScreen";
+import { AssistantScreen } from "./AssistantScreen";
 import { t } from "../i18n";
 import { PREMIUM_GATING_ENABLED } from "../config";
 import pruningShears from "../assets/pruning-shears.png";
@@ -42,6 +44,50 @@ function WishlistPopup({ onClose, lang, latitude, onSyncPlants, onAddToGarden })
   );
 }
 
+// ── Moestuin popup (bottom sheet modal) ──────────────────────────────────────
+
+function MoestuinPopup({ onClose, lang, latitude, onSyncPlants, initialDetailPlantId = null }) {
+  return createPortal(
+    <div className="garden-popup-overlay garden-popup-overlay--pruning" onClick={onClose}>
+      <div className="garden-pruning-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="garden-pruning-scroll">
+          <MoestuinScreen
+            lang={lang}
+            latitude={latitude}
+            onClose={onClose}
+            onSyncPlants={onSyncPlants}
+            initialDetailPlantId={initialDetailPlantId}
+          />
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ── Assistant popup (bottom sheet modal) ─────────────────────────────────────
+// No .garden-pruning-scroll wrapper: the chat manages its own scrolling so the
+// input row stays pinned at the bottom of the sheet.
+
+function AssistantPopup({ onClose, lang, gardenPlants, hasMoestuinPlants, advice, locationName, soilType }) {
+  return createPortal(
+    <div className="garden-popup-overlay garden-popup-overlay--pruning" onClick={onClose}>
+      <div className="garden-pruning-modal" onClick={(e) => e.stopPropagation()}>
+        <AssistantScreen
+          lang={lang}
+          onClose={onClose}
+          gardenPlants={gardenPlants}
+          hasMoestuinPlants={hasMoestuinPlants}
+          advice={advice}
+          locationName={locationName}
+          soilType={soilType}
+        />
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ── Pruning popup (bottom sheet modal) ───────────────────────────────────────
 
 function PruningPopup({ onClose, userId, onSyncPlants, lang, latitude }) {
@@ -66,9 +112,20 @@ function PruningPopup({ onClose, userId, onSyncPlants, lang, latitude }) {
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
-export function MijnTuinScreen({ userId, onSyncPlants, onSyncWishlistPlants, lang, latitude }) {
+export function MijnTuinScreen({ userId, onSyncPlants, onSyncWishlistPlants, onSyncMoestuinPlants, focusMoestuinPlantId = null, onMoestuinFocusHandled = null, lang, latitude, gardenPlants = [], hasMoestuinPlants = false, advice = null, locationName = "", soilType = "unknown" }) {
   const [openTile, setOpenTile] = useState(null);
   const [showInfo, setShowInfo] = useState(false);
+  const [moestuinDetailId, setMoestuinDetailId] = useState(null);
+
+  // A check-in push was tapped: open the moestuin sheet on that plant.
+  // The id is copied to local state before clearing the App-level flag so the
+  // popup keeps it for the rest of its lifetime.
+  useEffect(() => {
+    if (!focusMoestuinPlantId) return;
+    setMoestuinDetailId(focusMoestuinPlantId);
+    setOpenTile("moestuin");
+    onMoestuinFocusHandled?.();
+  }, [focusMoestuinPlantId, onMoestuinFocusHandled]);
 
   const heroLines = t(lang, "gardenHeroHeading").split("\n");
 
@@ -115,17 +172,29 @@ export function MijnTuinScreen({ userId, onSyncPlants, onSyncWishlistPlants, lan
           icon="🥕"
           title={t(lang, "gardenTileVegetable")}
           subtitle={t(lang, "gardenTileVegetableSub")}
-          isComingSoon
-          comingSoonLabel={t(lang, "gardenComingSoon")}
+          onClick={() => setOpenTile("moestuin")}
+          isPremium
         />
         <GardenTile
           icon="💬"
           title={t(lang, "gardenTileAI")}
           subtitle={t(lang, "gardenTileAISub")}
-          isComingSoon
-          comingSoonLabel={t(lang, "gardenComingSoon")}
+          onClick={() => setOpenTile("assistant")}
+          isPremium
         />
       </div>
+
+      {openTile === "assistant" && (
+        <AssistantPopup
+          onClose={() => setOpenTile(null)}
+          lang={lang}
+          gardenPlants={gardenPlants}
+          hasMoestuinPlants={hasMoestuinPlants}
+          advice={advice}
+          locationName={locationName}
+          soilType={soilType}
+        />
+      )}
 
       {openTile === "pruning" && (
         <PruningPopup
@@ -134,6 +203,16 @@ export function MijnTuinScreen({ userId, onSyncPlants, onSyncWishlistPlants, lan
           onSyncPlants={onSyncPlants}
           lang={lang}
           latitude={latitude}
+        />
+      )}
+
+      {openTile === "moestuin" && (
+        <MoestuinPopup
+          lang={lang}
+          latitude={latitude}
+          onClose={() => { setOpenTile(null); setMoestuinDetailId(null); }}
+          onSyncPlants={onSyncMoestuinPlants}
+          initialDetailPlantId={moestuinDetailId}
         />
       )}
 

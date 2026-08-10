@@ -8,8 +8,10 @@ const HEADERS = {
 };
 
 /**
- * Compress an image File to a JPEG data URL, scaled to max 1024px on the
+ * Compress an image File to a JPEG data URL, scaled to max 1536px on the
  * longest side. Returns a base64 string (without the data URI prefix).
+ * 1536px is the sweet spot: Claude vision resizes above 1568px anyway, and
+ * finer leaf/flower detail measurably improves identification.
  */
 export function compressImage(file) {
   return new Promise((resolve, reject) => {
@@ -19,7 +21,7 @@ export function compressImage(file) {
     img.onload = () => {
       URL.revokeObjectURL(url);
 
-      const MAX = 1024;
+      const MAX = 1536;
       let { width, height } = img;
       if (width > MAX || height > MAX) {
         if (width > height) {
@@ -38,7 +40,7 @@ export function compressImage(file) {
       ctx.drawImage(img, 0, 0, width, height);
 
       // toDataURL returns "data:image/jpeg;base64,<data>"
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
       // Strip the prefix — the edge function handles both forms but strip anyway
       resolve(dataUrl.split(",")[1]);
     };

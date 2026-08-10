@@ -151,6 +151,7 @@ export function BestDayToWaterScreen({
   weatherInputs = null,
   wateringScheduleDates = null,
   gardenPlants = [],
+  hasMoestuinPlants = false,
   wateringHistory = {},
   lastWateredDate = null,
   wateringDaysLast7 = 0,
@@ -176,15 +177,16 @@ export function BestDayToWaterScreen({
     rainNext3,
   } = advice || {};
 
-  // Derive active categories from the user's plant lists (pruning + herbs tabs).
+  // Derive active categories from the user's plant lists (pruning + moestuin tabs).
   const activeCategoryKeys = useMemo(() => {
     const keys = new Set();
     gardenPlants.forEach((p) => {
       const cat = p.waterCategory ?? detectWaterCategory(p);
       if (cat in CATEGORIES) keys.add(cat);
     });
+    if (hasMoestuinPlants) keys.add("vegetable");
     return CATEGORY_ORDER.filter((k) => keys.has(k));
-  }, [gardenPlants]);
+  }, [gardenPlants, hasMoestuinPlants]);
 
   const hasPlants = activeCategoryKeys.length > 0;
 

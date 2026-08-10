@@ -1,0 +1,239 @@
+/* ── Emoji thumbnail (crops have no photos) ── */
+.moestuin-emoji-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef4ea;
+  font-size: 26px;
+}
+
+.moestuin-emoji-thumb--large {
+  font-size: 40px;
+}
+
+/* ── Row stage line ── */
+.moestuin-stage-line {
+  font-size: 12px;
+  color: #5a7a5a;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* ── Sow-this-month card ── */
+.moestuin-sow-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  box-shadow: 0 1px 4px rgba(26, 61, 26, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.moestuin-sow-card-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a3d1a;
+}
+
+.moestuin-sow-card-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #9aab94;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.moestuin-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.moestuin-chip {
+  border: 1px solid #d4e3d0;
+  background: #f6faf4;
+  color: #1a3d1a;
+  border-radius: 100px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+}
+
+.moestuin-chip:active {
+  background: #e3efdd;
+}
+
+/* ── Detail sheet ── */
+.moestuin-detail-sheet {
+  padding-top: 8px;
+}
+
+.moestuin-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+
+.moestuin-detail-emoji {
+  font-size: 44px;
+  line-height: 1;
+}
+
+/* ── Stage timeline ── */
+.moestuin-stage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.moestuin-stage-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  color: #9aab94;
+}
+
+.moestuin-stage-item--done {
+  color: #1a3d1a;
+}
+
+.moestuin-stage-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #d4e3d0;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.moestuin-stage-item--done .moestuin-stage-dot {
+  background: #3d7a3d;
+  border-color: #3d7a3d;
+}
+
+.moestuin-stage-name {
+  flex: 1;
+}
+
+.moestuin-stage-date {
+  font-size: 13px;
+}
+
+.moestuin-stage-hint {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #5a7a5a;
+  font-family: 'DM Sans', sans-serif;
+  font-style: italic;
+}
+
+/* ── Advance / undo buttons ── */
+.moestuin-advance-btn {
+  display: block;
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px 16px;
+  background: #3d7a3d;
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.moestuin-advance-btn:active {
+  background: #2f5f2f;
+}
+
+.moestuin-undo-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px;
+  background: none;
+  border: none;
+  color: #9aab94;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ── Add popup crop list ── */
+.moestuin-crop-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+  overflow-y: auto;
+}
+
+.moestuin-crop-cat-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #9aab94;
+  font-family: 'DM Sans', sans-serif;
+  padding: 12px 4px 6px;
+}
+
+.moestuin-crop-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 4px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #eef4ea;
+  cursor: pointer;
+  text-align: left;
+}
+
+.moestuin-crop-item-emoji {
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.moestuin-crop-item-name {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  color: #1a3d1a;
+  font-weight: 500;
+}
+
+.moestuin-crop-item-sci {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: #9aab94;
+  font-style: italic;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40%;
+}
+
+/* Selected-card in add popup: emoji instead of photo */
+.pruning-selected-image-wrap.moestuin-emoji-thumb {
+  border-radius: 12px;
+}
+
+.moestuin-selected-clear {
+  align-self: flex-start;
+}

@@ -707,6 +707,11 @@
   flex-shrink: 0;
 }
 
+.pruning-ai-pick-badge {
+  color: #fff;
+  background: #3d7a3d;
+}
+
 .pruning-recognition-not-in-db {
   font-size: 10px;
   font-weight: 600;

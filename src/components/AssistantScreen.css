@@ -1,0 +1,299 @@
+/* AssistantScreen — AI chat inside the Mijn Tuin bottom-sheet modal.
+   Fills .garden-pruning-modal (flex column, full height): header on top,
+   scrollable message list, input row pinned at the bottom. */
+
+.assistant-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #fff;
+  font-family: "DM Sans", sans-serif;
+}
+
+/* ── Header ── */
+
+.assistant-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid #eef2ee;
+  flex-shrink: 0;
+}
+
+.assistant-title {
+  flex: 1;
+  font-family: "Playfair Display", serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a3d1a;
+}
+
+.assistant-title--chat {
+  font-size: 18px;
+}
+
+.assistant-back {
+  border: none;
+  background: #f0f4ef;
+  color: #1a3d1a;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 22px;
+  line-height: 1;
+  padding-bottom: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ── Category picker ── */
+
+.assistant-home {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px 20px calc(24px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.assistant-intro {
+  font-size: 14px;
+  color: #5a7a5a;
+  margin: 0 0 4px;
+  line-height: 1.5;
+}
+
+.assistant-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #f7faf6;
+  border: 1px solid #e4ece2;
+  border-radius: 18px;
+  padding: 18px 16px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.assistant-card-icon {
+  font-size: 30px;
+  flex-shrink: 0;
+}
+
+.assistant-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.assistant-card-title {
+  font-family: "DM Sans", sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a3d1a;
+}
+
+.assistant-card-sub {
+  font-size: 13px;
+  color: #5a7a5a;
+  line-height: 1.4;
+}
+
+.assistant-card-chevron {
+  font-size: 26px;
+  color: #9ab59a;
+  flex-shrink: 0;
+}
+
+.assistant-disclaimer {
+  font-size: 12px;
+  color: #9ab59a;
+  text-align: center;
+  margin: auto 0 0;
+  padding-top: 16px;
+}
+
+/* ── Chat ── */
+
+.assistant-messages {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.assistant-bubble {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.assistant-bubble--assistant {
+  align-self: flex-start;
+  background: #f0f4ef;
+  color: #1f3a1f;
+  border-bottom-left-radius: 4px;
+}
+
+.assistant-bubble--user {
+  align-self: flex-end;
+  background: #2e6b2e;
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.assistant-bubble--error {
+  align-self: center;
+  background: #fdf0ee;
+  color: #a4442f;
+  font-size: 13px;
+}
+
+.assistant-bubble-image {
+  display: block;
+  max-width: 180px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+
+/* Typing indicator: three pulsing dots */
+.assistant-typing {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px 2px;
+}
+
+.assistant-typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #9ab59a;
+  animation: assistant-typing-pulse 1.2s infinite ease-in-out;
+}
+
+.assistant-typing span:nth-child(2) { animation-delay: 0.2s; }
+.assistant-typing span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes assistant-typing-pulse {
+  0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+/* ── Chips ── */
+
+.assistant-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px;
+  flex-shrink: 0;
+}
+
+.assistant-chip {
+  border: 1px solid #cfe0cd;
+  background: #fff;
+  color: #2e6b2e;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-family: "DM Sans", sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ── Pending photo preview ── */
+
+.assistant-pending-image {
+  position: relative;
+  align-self: flex-start;
+  margin: 4px 16px;
+  flex-shrink: 0;
+}
+
+.assistant-pending-image img {
+  height: 64px;
+  border-radius: 10px;
+  display: block;
+}
+
+.assistant-pending-image-remove {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: #1a3d1a;
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+/* ── Input row ── */
+
+.assistant-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid #eef2ee;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.assistant-camera-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid #cfe0cd;
+  background: #f7faf6;
+  font-size: 19px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.assistant-input {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  border: 1px solid #dbe6d9;
+  border-radius: 999px;
+  padding: 0 16px;
+  font-family: "DM Sans", sans-serif;
+  font-size: 16px; /* ≥16px prevents iOS auto-zoom on focus */
+  color: #1f3a1f;
+  background: #fff;
+  outline: none;
+}
+
+.assistant-input:focus {
+  border-color: #2e6b2e;
+}
+
+.assistant-send-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: #2e6b2e;
+  color: #fff;
+  font-size: 17px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.assistant-send-btn:disabled {
+  background: #c9d8c7;
+  cursor: default;
+}

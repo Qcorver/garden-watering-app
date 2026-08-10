@@ -422,7 +422,14 @@ function AddWishlistPlantPopup({ onSave, onClose, lang }) {
                   <div className="pruning-result-text">
                     <div className="pruning-result-row">
                       <span className="pruning-result-name">{match.commonName ?? match.scientificName}</span>
-                      <span className="pruning-confidence-badge">{match.score}%</span>
+                      {match.aiVerified && (
+                        <span className="pruning-confidence-badge pruning-ai-pick-badge">
+                          ✓ {t(lang, "pruneRecognitionAiPick")}
+                        </span>
+                      )}
+                      {match.score != null && (
+                        <span className="pruning-confidence-badge">{match.score}%</span>
+                      )}
                       {!match.dbId && (
                         <span className="pruning-recognition-not-in-db">{t(lang, "pruneRecognitionNotInDb")}</span>
                       )}

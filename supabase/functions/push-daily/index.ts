@@ -13,6 +13,12 @@ import {
  * Uses the same watering algorithm as the frontend (wateringLogic.js):
  * wet-soil gates, seasonal adjustment, and weekly rain targets.
  *
+ * Send windows (local time per user; cron fires every 30 min):
+ * - 10:00 — daily watering advice
+ * - 19:00 — moestuin growth check-in (daily) + pruning/planting (1st of month;
+ *   deferred to the 2nd and merged into one push when a check-in goes out on
+ *   the 1st)
+ *
  * Schema:
  * - push_devices: user_id, push_token, is_enabled, platform
  * - user_preferences: user_id, push_enabled
@@ -290,6 +296,14 @@ function getLocalDateString(date: Date, timeZone: string): string {
   }
 }
 
+function daysBetweenIso(fromIso: string, toIso: string): number {
+  return Math.floor((Date.parse(toIso) - Date.parse(fromIso)) / 86400000);
+}
+
+function isoAddDays(iso: string, delta: number): string {
+  return new Date(Date.parse(iso) + delta * 86400000).toISOString().slice(0, 10);
+}
+
 // ---------- timezone helpers for pruning ----------
 function getDayOfMonthInTimezone(date: Date, timeZone: string): number {
   try {
@@ -463,6 +477,33 @@ Deno.serve(async (req) => {
       });
     }
 
+    // 4c) moestuin plants (growth check-in pushes + vegetable watering category)
+    const { data: moestuinRows, error: moestuinError } = await supabase
+      .from("moestuin_plants")
+      .select(
+        "id,user_id,common_name,sown_on,germinated_on,planted_out_on,first_harvest_on,last_checkin_stage,last_checkin_sent,crop_species(days_to_germinate_min,days_to_harvest_min)",
+      )
+      .in("user_id", userIds);
+
+    if (moestuinError) throw moestuinError;
+
+    type MoestuinRow = {
+      id: string;
+      common_name: string;
+      sown_on: string | null;
+      germinated_on: string | null;
+      planted_out_on: string | null;
+      first_harvest_on: string | null;
+      last_checkin_stage: string | null;
+      last_checkin_sent: string | null;
+      crop_species: { days_to_germinate_min: number | null; days_to_harvest_min: number | null } | null;
+    };
+    const moestuinByUser = new Map<string, MoestuinRow[]>();
+    for (const row of moestuinRows ?? []) {
+      if (!moestuinByUser.has(row.user_id)) moestuinByUser.set(row.user_id, []);
+      moestuinByUser.get(row.user_id)!.push(row as unknown as MoestuinRow);
+    }
+
     // 5) watering sessions (last 7 days) — so push advice matches in-app advice
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -504,6 +545,7 @@ Deno.serve(async (req) => {
     let skippedLegacy = 0;
     let pruningSent = 0;
     let plantingSent = 0;
+    let checkinSent = 0;
 
     const errors: Array<{ token: string; status: number; json: any }> = [];
 
@@ -557,8 +599,6 @@ Deno.serve(async (req) => {
           if (!loc) return { kind: "skip", reason: "no_location" };
           const userLang: "en" | "nl" = prefs.lang === "nl" ? "nl" : "en";
 
-          const targetMin = 10 * 60; // 10:00 local time
-
           const lat = Number(loc?.lat);
           const lon = Number(loc?.lon);
           if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
@@ -569,12 +609,18 @@ Deno.serve(async (req) => {
           if (!rain) return { kind: "skip", reason: "weather_unavailable" };
           const nowLocalMin = minutesSinceMidnightInTimeZone(now, rain.timezone);
 
-          if (!withinWindow(nowLocalMin, targetMin, windowMinutes)) {
+          // Two send windows: watering advice at 10:00 local time; garden-task
+          // notifications (moestuin check-in + monthly pruning/planting) at
+          // 19:00, when people are more likely to walk into the garden.
+          // The cron fires every 30 min, so each window is hit exactly once.
+          const inMorning = withinWindow(nowLocalMin, 10 * 60, windowMinutes);
+          const inEvening = withinWindow(nowLocalMin, 19 * 60, windowMinutes);
+          if (!inMorning && !inEvening) {
             return { kind: "skip", reason: "outside_window" };
           }
           inWindow++;
 
-          // ── Watering notification ────────────────────────────────────
+          // ── Watering notification (10:00) ────────────────────────────
           // Same parameters as the app: soil type + sensitivity from
           // user_preferences, and per-category advice derived from the
           // user's garden plants (falls back to generic advice without plants).
@@ -582,6 +628,7 @@ Deno.serve(async (req) => {
           const sensitivityFactor = 1.0 + (Number(prefs.sensitivity) || 0) / 100;
 
           const userPlants = plantsByUser.get(row.user_id) ?? [];
+          const userMoestuin = moestuinByUser.get(row.user_id) ?? [];
           const categoryKeys = Array.from(new Set(
             userPlants.map((p) => detectWaterCategory({
               inPot: p.in_pot,
@@ -589,6 +636,10 @@ Deno.serve(async (req) => {
               maintenance: p.maintenance,
             })),
           ));
+          // Moestuin crops count as the vegetable category, same as in the app
+          if (userMoestuin.length > 0 && !categoryKeys.includes("vegetable")) {
+            categoryKeys.push("vegetable");
+          }
 
           const todayLocalStr = getLocalDateString(now, rain.timezone);
 
@@ -630,10 +681,12 @@ Deno.serve(async (req) => {
             : (d ?? "");
 
           // Notify when at least one of the user's plant categories should be
-          // watered today.
-          const triggering = adviceVariants.find(
-            (a) => a.shouldWater && toDateStr(a.bestWateringDate) === todayLocalStr,
-          );
+          // watered today. Only sent in the morning window.
+          const triggering = inMorning
+            ? adviceVariants.find(
+                (a) => a.shouldWater && toDateStr(a.bestWateringDate) === todayLocalStr,
+              )
+            : undefined;
 
           if (triggering) {
             attempted++;
@@ -671,78 +724,193 @@ Deno.serve(async (req) => {
             }
           }
 
-          // ── Pruning + planting notifications (1st of the month only) ────
-          const dayOfMonth = getDayOfMonthInTimezone(now, rain.timezone);
-          if (dayOfMonth === 1) {
-            // For SH users we look up the NH-equivalent month, because
-            // pruning_months/planting_months are stored as NH calendar months.
-            const nhMonthName = getNHEquivalentMonthName(now, rain.timezone, lat);
+          // ── Evening window (19:00): check-in + monthly pruning/planting ──
+          if (inEvening) {
+            // 1) Moestuin growth check-in ("see anything sprouting?").
+            //    Ask once when the expected germination/harvest time has
+            //    passed, plus at most one reminder a week later. Mirrors
+            //    checkDue() in MoestuinScreen.jsx so app badges and pushes
+            //    always agree. Max one check-in per user per day.
+            //    Determined first: a due check-in defers the monthly
+            //    pruning/planting push to the 2nd.
+            let checkin: { plant: MoestuinRow; stage: "germinated" | "harvest"; reminder: boolean } | null = null;
+            for (const mp of userMoestuin) {
+              const germMin = mp.crop_species?.days_to_germinate_min ?? null;
+              const harvMin = mp.crop_species?.days_to_harvest_min ?? null;
+              const sinceSown = mp.sown_on ? daysBetweenIso(mp.sown_on, todayLocalStr) : null;
 
-            // Pruning
-            const plantsThisMonth = userPlants.filter(
-              (p) => p.pruning_months.includes(nhMonthName),
-            );
+              let due: "germinated" | "harvest" | null = null;
+              if (mp.sown_on && !mp.germinated_on && germMin != null && sinceSown! >= germMin) {
+                due = "germinated";
+              } else if (
+                mp.sown_on && mp.germinated_on && !mp.first_harvest_on &&
+                harvMin != null && sinceSown! >= harvMin
+              ) {
+                due = "harvest";
+              }
+              if (!due) continue;
 
-            if (plantsThisMonth.length > 0) {
-              const pruningTitle = userLang === "nl" ? "Tijd om te snoeien!" : "Time to Prune!";
-              const pruningBody = userLang === "nl"
-                ? "Open de app om te zien welke planten gesnoeid kunnen worden"
-                : "Open the app to see which plants need pruning";
-
-              if (!dryRun) {
-                const pr = await sendFcm(
-                  accessToken,
-                  tokenRaw,
-                  pruningTitle,
-                  pruningBody,
-                  {
-                    kind: "pruning",
-                    sent_at: new Date().toISOString(),
-                    month: nhMonthName,
-                  },
-                );
-                if (pr.ok) pruningSent++;
-              } else {
-                pruningSent++;
+              const askedOnce = mp.last_checkin_stage === due;
+              const askedReminder = mp.last_checkin_stage === `${due}_reminded`;
+              if (!askedOnce && !askedReminder) {
+                checkin = { plant: mp, stage: due, reminder: false };
+                break;
+              }
+              if (
+                askedOnce && mp.last_checkin_sent &&
+                daysBetweenIso(mp.last_checkin_sent, todayLocalStr) >= 7
+              ) {
+                checkin = { plant: mp, stage: due, reminder: true };
+                break;
               }
             }
 
-            // Planting (wishlist)
+            // 2) Monthly pruning + planting (wishlist). Normally sent on the
+            //    1st. When a check-in also goes out on the 1st, both monthly
+            //    messages are deferred to the 2nd and merged into one push.
+            const dayOfMonth = getDayOfMonthInTimezone(now, rain.timezone);
+            // For SH users we look up the NH-equivalent month, because
+            // pruning_months/planting_months are stored as NH calendar months.
+            const nhMonthName = getNHEquivalentMonthName(now, rain.timezone, lat);
+            const plantsThisMonth = userPlants.filter(
+              (p) => p.pruning_months.includes(nhMonthName),
+            );
             const userWishlist = wishlistByUser.get(row.user_id) ?? [];
             const wishlistThisMonth = userWishlist.filter(
               (p) => p.planting_months.includes(nhMonthName),
             );
+            const pruningDue = plantsThisMonth.length > 0;
+            const plantingDue = wishlistThisMonth.length > 0;
 
-            if (wishlistThisMonth.length > 0) {
-              const plantingTitle = userLang === "nl" ? "Tijd om te planten!" : "Time to Plant!";
-              const plantingBody = userLang === "nl"
-                ? "Open de app om te zien welke planten de grond in kunnen"
-                : "Open the app to see which plants are ready to go in the ground";
+            let sendMonthly = false;
+            let monthlyMerged = false;
+            if (dayOfMonth === 1 && !checkin && (pruningDue || plantingDue)) {
+              sendMonthly = true;
+            } else if (dayOfMonth === 2 && (pruningDue || plantingDue)) {
+              // Deferred: only fires if a check-in actually went out on the 1st.
+              const yesterdayStr = isoAddDays(todayLocalStr, -1);
+              const checkinWentOutYesterday = userMoestuin.some(
+                (mp) => mp.last_checkin_sent === yesterdayStr,
+              );
+              if (checkinWentOutYesterday) {
+                sendMonthly = true;
+                monthlyMerged = true;
+                // Hold today's check-in so the deferred monthly push stands
+                // alone; its due-state is unchanged so it fires tomorrow.
+                checkin = null;
+              }
+            }
 
-              if (!dryRun) {
-                const pl = await sendFcm(
-                  accessToken,
-                  tokenRaw,
-                  plantingTitle,
-                  plantingBody,
-                  {
-                    kind: "planting",
+            if (sendMonthly) {
+              if (monthlyMerged && pruningDue && plantingDue) {
+                const mergedTitle = userLang === "nl"
+                  ? "Tijd om te snoeien en te planten!"
+                  : "Time to prune and plant!";
+                const mergedBody = userLang === "nl"
+                  ? "Open de app om te zien welke planten gesnoeid of geplant kunnen worden"
+                  : "Open the app to see which plants need pruning or planting";
+
+                if (!dryRun) {
+                  const mr = await sendFcm(accessToken, tokenRaw, mergedTitle, mergedBody, {
+                    kind: "pruning_planting",
                     sent_at: new Date().toISOString(),
                     month: nhMonthName,
-                  },
-                );
-                if (pl.ok) plantingSent++;
+                  });
+                  if (mr.ok) { pruningSent++; plantingSent++; }
+                } else {
+                  pruningSent++;
+                  plantingSent++;
+                }
               } else {
-                plantingSent++;
+                if (pruningDue) {
+                  const pruningTitle = userLang === "nl" ? "Tijd om te snoeien!" : "Time to Prune!";
+                  const pruningBody = userLang === "nl"
+                    ? "Open de app om te zien welke planten gesnoeid kunnen worden"
+                    : "Open the app to see which plants need pruning";
+
+                  if (!dryRun) {
+                    const pr = await sendFcm(
+                      accessToken,
+                      tokenRaw,
+                      pruningTitle,
+                      pruningBody,
+                      {
+                        kind: "pruning",
+                        sent_at: new Date().toISOString(),
+                        month: nhMonthName,
+                      },
+                    );
+                    if (pr.ok) pruningSent++;
+                  } else {
+                    pruningSent++;
+                  }
+                }
+
+                if (plantingDue) {
+                  const plantingTitle = userLang === "nl" ? "Tijd om te planten!" : "Time to Plant!";
+                  const plantingBody = userLang === "nl"
+                    ? "Open de app om te zien welke planten de grond in kunnen"
+                    : "Open the app to see which plants are ready to go in the ground";
+
+                  if (!dryRun) {
+                    const pl = await sendFcm(
+                      accessToken,
+                      tokenRaw,
+                      plantingTitle,
+                      plantingBody,
+                      {
+                        kind: "planting",
+                        sent_at: new Date().toISOString(),
+                        month: nhMonthName,
+                      },
+                    );
+                    if (pl.ok) plantingSent++;
+                  } else {
+                    plantingSent++;
+                  }
+                }
+              }
+            }
+
+            // 3) Send the check-in (unless held for a deferred monthly push).
+            if (checkin) {
+              const mp = checkin.plant;
+              const sinceSown = daysBetweenIso(mp.sown_on!, todayLocalStr);
+              const checkinTitle = checkin.stage === "germinated"
+                ? (userLang === "nl" ? "Al iets te zien? 🌱" : "Anything sprouting? 🌱")
+                : (userLang === "nl" ? "Bijna oogsttijd! 🧺" : "Harvest time soon! 🧺");
+              const checkinBody = checkin.stage === "germinated"
+                ? (userLang === "nl"
+                  ? `Je ${mp.common_name.toLowerCase()} is ${sinceSown} dagen geleden gezaaid — zie je al iets groeien?`
+                  : `Your ${mp.common_name} was sown ${sinceSown} days ago — see anything growing yet?`)
+                : (userLang === "nl"
+                  ? `Je ${mp.common_name.toLowerCase()} is misschien klaar voor de eerste oogst — ga eens kijken!`
+                  : `Your ${mp.common_name} may be ready for its first harvest — take a look!`);
+
+              if (!dryRun) {
+                const cr = await sendFcm(accessToken, tokenRaw, checkinTitle, checkinBody, {
+                  kind: "moestuin_checkin",
+                  plant_id: mp.id,
+                  stage: checkin.stage,
+                  sent_at: new Date().toISOString(),
+                });
+                if (cr.ok) {
+                  checkinSent++;
+                  await supabase
+                    .from("moestuin_plants")
+                    .update({
+                      last_checkin_stage: checkin.reminder ? `${checkin.stage}_reminded` : checkin.stage,
+                      last_checkin_sent: todayLocalStr,
+                    })
+                    .eq("id", mp.id);
+                }
+              } else {
+                checkinSent++;
               }
             }
           }
 
-          if (!triggering) {
-            return { kind: "no_send", reason: "not_triggered" };
-          }
-
-          return { kind: "sent" };
+          return { kind: triggering ? "sent" : "done" };
         }),
       );
 
@@ -764,6 +932,7 @@ Deno.serve(async (req) => {
         sent,
         pruning_sent: pruningSent,
         planting_sent: plantingSent,
+        checkin_sent: checkinSent,
         skipped_legacy_apns: skippedLegacy,
         errors: errors.slice(0, 10),
       },

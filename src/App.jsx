@@ -11,6 +11,9 @@ import { CATEGORIES, calculateWateringAdvice, getCategoryAdviceParams } from "@s
 import { SettingsScreen, getSoilMultiplier } from "./components/SettingsScreen";
 import { OnboardingCarousel } from "./components/OnboardingCarousel";
 
+import { Capacitor } from "@capacitor/core";
+import { PushNotifications } from "@capacitor/push-notifications";
+
 import { useAuth } from "./hooks/useAuth";
 import { usePushNotifications } from "./hooks/usePushNotifications";
 import { useWeatherAdvice } from "./hooks/useWeatherAdvice";
@@ -89,6 +92,11 @@ async function refreshPruningMonthsFromDB(plants, onUpdated) {
     saveGardenPlants(updated);
     onUpdated(updated);
   }
+}
+
+function hasMoestuinPlantsInStorage() {
+  try { return (JSON.parse(localStorage.getItem("moestuinPlants") ?? "[]") || []).length > 0; }
+  catch { return false; }
 }
 
 // --- Helpers for watering history ---
@@ -255,12 +263,33 @@ export default function App() {
   // --- Garden + herbs plants (for per-category home screen advice) ---
   const [gardenPlants, setGardenPlants] = useState(() => migrateCategories(loadGardenPlants()));
 
+  // Moestuin crops count toward the vegetable watering category.
+  const [hasMoestuinPlants, setHasMoestuinPlants] = useState(hasMoestuinPlantsInStorage);
+
+  // Deep link from a moestuin check-in push: plant to open in the detail sheet.
+  const [moestuinFocusId, setMoestuinFocusId] = useState(null);
+
   // Refresh plant lists when navigating back to the home tab.
   useEffect(() => {
     if (activeTab === "best") {
       setGardenPlants(migrateCategories(loadGardenPlants()));
+      setHasMoestuinPlants(hasMoestuinPlantsInStorage());
     }
   }, [activeTab]);
+
+  // Tapping a moestuin check-in notification opens that plant's status sheet.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let handle;
+    PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
+      const data = action?.notification?.data ?? {};
+      if (data.kind === "moestuin_checkin" && data.plant_id) {
+        setMoestuinFocusId(data.plant_id);
+        setActiveTab("garden");
+      }
+    }).then((h) => { handle = h; });
+    return () => { handle?.remove(); };
+  }, []);
 
   // --- Hooks ---
   const { userId, ensureAuthUserId } = useAuth();
@@ -351,8 +380,10 @@ export default function App() {
       const seenCats = new Set();
       for (const plant of gardenPlants) {
         const cat = plant.waterCategory ?? detectWaterCategory(plant);
-        if (!CATEGORIES[cat] || seenCats.has(cat)) continue;
-        seenCats.add(cat);
+        if (CATEGORIES[cat]) seenCats.add(cat);
+      }
+      if (hasMoestuinPlants) seenCats.add("vegetable");
+      for (const cat of seenCats) {
         const catAdvice = calculateWateringAdvice({ ...simInputs, ...getCategoryAdviceParams(cat, soilMultiplier) });
         if (catAdvice.shouldWater && bestStr(catAdvice.bestWateringDate) === dStr) {
           needsWater = true;
@@ -373,7 +404,7 @@ export default function App() {
     }
 
     return schedule;
-  }, [weatherInputs, historicalDailyRain, dailyForecastNext5, gardenPlants, lastWateredDate, wateredDayKeys, soilMultiplier, sensitivityFactor]);
+  }, [weatherInputs, historicalDailyRain, dailyForecastNext5, gardenPlants, hasMoestuinPlants, lastWateredDate, wateredDayKeys, soilMultiplier, sensitivityFactor]);
 
   // Silently refresh pruning months from plant_species once after auth,
   // so corrections to the canonical data reach users without re-adding plants.
@@ -459,6 +490,43 @@ export default function App() {
         ? await deleteQ.not("id", "in", `(${keepIds.map((id) => `"${id}"`).join(",")})`)
         : await deleteQ;
       if (delError) console.error("[wishlist] delete failed", delError);
+    },
+    [userId]
+  );
+
+  // --- Sync moestuin plants to Supabase (for growth check-in push notifications) ---
+  const syncMoestuinPlants = useCallback(
+    async (plants) => {
+      setHasMoestuinPlants(plants.length > 0);
+      if (!userId) return;
+      const rows = plants.map((p) => ({
+        id: p.id,
+        user_id: userId,
+        crop_id: p.cropId ?? null,
+        common_name: p.nameNl ?? p.nameEn ?? "?",
+        sown_on: p.sownOn ?? null,
+        germinated_on: p.germinatedOn ?? null,
+        planted_out_on: p.plantedOutOn ?? null,
+        first_harvest_on: p.firstHarvestOn ?? null,
+        updated_at: new Date().toISOString(),
+      }));
+
+      if (rows.length > 0) {
+        const { error } = await supabase
+          .from("moestuin_plants")
+          .upsert(rows, { onConflict: "id" });
+        if (error) console.error("[moestuin] upsert failed", error);
+      }
+
+      const keepIds = plants.map((p) => p.id);
+      const deleteQ = supabase
+        .from("moestuin_plants")
+        .delete()
+        .eq("user_id", userId);
+      const { error: delError } = keepIds.length > 0
+        ? await deleteQ.not("id", "in", `(${keepIds.map((id) => `"${id}"`).join(",")})`)
+        : await deleteQ;
+      if (delError) console.error("[moestuin] delete failed", delError);
     },
     [userId]
   );
@@ -582,6 +650,7 @@ export default function App() {
             weatherInputs={weatherInputs}
             wateringScheduleDates={wateringScheduleDates}
             gardenPlants={gardenPlants}
+            hasMoestuinPlants={hasMoestuinPlants}
             wateringHistory={wateringHistory}
             lastWateredDate={lastWateredDate}
             wateringDaysLast7={wateringDaysLast7}
@@ -605,8 +674,16 @@ export default function App() {
             userId={userId}
             onSyncPlants={syncPlants}
             onSyncWishlistPlants={syncWishlistPlants}
+            onSyncMoestuinPlants={syncMoestuinPlants}
+            focusMoestuinPlantId={moestuinFocusId}
+            onMoestuinFocusHandled={() => setMoestuinFocusId(null)}
             lang={lang}
             latitude={locationLat}
+            gardenPlants={gardenPlants}
+            hasMoestuinPlants={hasMoestuinPlants}
+            advice={advice}
+            locationName={locationName}
+            soilType={soilType}
           />
         )}
 
