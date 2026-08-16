@@ -744,7 +744,10 @@ const plantValueMaps = {
  */
 export function translatePlantValue(lang, field, value) {
   if (!value) return value;
+  // API enums use underscores ("full_sun"); the maps are keyed with spaces
+  // ("full sun"). Normalise so lookups match, and so unmapped values never
+  // leak a raw "full_sun" into the UI.
+  const normalized = value.toLowerCase().replace(/_/g, " ");
   const map = plantValueMaps[field]?.[lang] ?? plantValueMaps[field]?.en;
-  if (!map) return value;
-  return map[value.toLowerCase()] ?? value;
+  return map?.[normalized] ?? normalized;
 }
