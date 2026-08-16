@@ -21,6 +21,15 @@
   flex-shrink: 0;
 }
 
+/* The shared .pruning-sheet-close is position:absolute, which here anchors to
+   the fullscreen overlay's padding box (top:16px lands in the status bar).
+   In this header the ✕ is already a flex child next to the title, so keep it
+   in the flex flow — it sits neatly beside the title, safe-area-proof. */
+.assistant-header .pruning-sheet-close {
+  position: static;
+  flex-shrink: 0;
+}
+
 .assistant-title {
   flex: 1;
   font-family: "Playfair Display", serif;
