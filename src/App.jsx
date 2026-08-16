@@ -24,8 +24,14 @@ import "./styles/globals.css";
 
 // --- Helpers for garden / herbs plants ---
 function loadGardenPlants() {
-  try { return JSON.parse(localStorage.getItem("gardenPlants") ?? "[]") || []; }
-  catch { return []; }
+  try {
+    const parsed = JSON.parse(localStorage.getItem("gardenPlants") ?? "[]");
+    // Guard against a corrupted array (non-array, or null/primitive entries):
+    // downstream code does p.waterCategory / detectWaterCategory(p) during the
+    // very first render, so a single bad entry would white-screen the app.
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((p) => p && typeof p === "object");
+  } catch { return []; }
 }
 function saveGardenPlants(plants) {
   try { localStorage.setItem("gardenPlants", JSON.stringify(plants)); } catch { /* ignore */ }
@@ -106,6 +112,15 @@ const HISTORY_RETENTION_DAYS = 90;
 
 function historyRetentionCutoff() {
   return format(addDays(new Date(), -HISTORY_RETENTION_DAYS), "yyyy-MM-dd");
+}
+
+// date-fns format() throws a RangeError on an Invalid Date, which would crash
+// the whole render (white screen). Returns a Date only when parseable, else null
+// so hot paths can skip a malformed weather-data entry instead of throwing.
+function toValidDate(value) {
+  if (!value) return null; // treat null/undefined/"" as invalid (new Date(null) → epoch!)
+  const d = value instanceof Date ? value : new Date(value);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 function loadWateringHistory() {
@@ -306,12 +321,14 @@ export default function App() {
 
     const rainMap = new Map();
     historicalDailyRain.forEach(({ date, rainMm }) => {
-      rainMap.set(format(date instanceof Date ? date : new Date(date), "yyyy-MM-dd"), rainMm ?? 0);
+      const d = toValidDate(date);
+      if (d) rainMap.set(format(d, "yyyy-MM-dd"), rainMm ?? 0);
     });
     // Forecast days use probability-weighted rain so uncertain showers don't
     // suppress future watering days the way certain rain would.
     dailyForecastNext5.forEach(({ date, rainMm, expectedRainMm }) => {
-      rainMap.set(format(date instanceof Date ? date : new Date(date), "yyyy-MM-dd"), expectedRainMm ?? rainMm ?? 0);
+      const d = toValidDate(date);
+      if (d) rainMap.set(format(d, "yyyy-MM-dd"), expectedRainMm ?? rainMm ?? 0);
     });
 
     const getRain = (d) => rainMap.get(format(d, "yyyy-MM-dd")) ?? 0;
@@ -322,8 +339,8 @@ export default function App() {
     const futTemps = weatherInputs.tempNext5 ?? [];
     const tempMap = new Map();
     [...(weatherInputs.tempLast7 ?? []), ...futTemps].forEach((t) => {
-      const d = t.date instanceof Date ? t.date : new Date(t.date);
-      tempMap.set(format(d, "yyyy-MM-dd"), { ...t, date: d });
+      const d = toValidDate(t.date);
+      if (d) tempMap.set(format(d, "yyyy-MM-dd"), { ...t, date: d });
     });
 
     const schedule = new Set();
@@ -331,7 +348,8 @@ export default function App() {
     const simWateredKeys = [...wateredDayKeys]; // Actual + simulated watering days for budget counting
 
     for (const fd of dailyForecastNext5) {
-      const D = fd.date instanceof Date ? fd.date : new Date(fd.date);
+      const D = toValidDate(fd.date);
+      if (!D) continue; // skip a malformed forecast entry rather than crashing
       const last7 = Array.from({ length: 7 }, (_, i) => getRain(addDays(D, i - 7)));
 
       const dStr = format(D, "yyyy-MM-dd");
@@ -345,16 +363,16 @@ export default function App() {
         rainNext3: [0, 1, 2].map((i) => getRain(addDays(D, i))).reduce((s, v) => s + v, 0),
         // Filter forecast to start from D so bestWateringDate is picked relative to D, not today
         dailyForecastNext5: (weatherInputs.dailyForecastNext5 ?? []).filter((f) => {
-          const fd = f.date instanceof Date ? f.date : new Date(f.date);
-          return format(fd, "yyyy-MM-dd") >= dStr;
+          const fdDate = toValidDate(f.date);
+          return fdDate ? format(fdDate, "yyyy-MM-dd") >= dStr : false;
         }),
         // Rebuild the temperature windows from D's perspective (mix of historical + forecast)
         tempLast7: Array.from({ length: 7 }, (_, i) =>
           tempMap.get(format(addDays(D, i - 7), "yyyy-MM-dd"))
         ).filter(Boolean),
         tempNext5: futTemps.filter((tf) => {
-          const td = tf.date instanceof Date ? tf.date : new Date(tf.date);
-          return format(td, "yyyy-MM-dd") >= dStr;
+          const td = toValidDate(tf.date);
+          return td ? format(td, "yyyy-MM-dd") >= dStr : false;
         }),
         lastWateredDate: simLastWateredDate,
         wateringDaysLast7: countWateringDaysLast7(simWateredKeys, D),
@@ -364,8 +382,8 @@ export default function App() {
       };
 
       const bestStr = (d) => {
-        if (!d) return null;
-        return format(d instanceof Date ? d : new Date(d), "yyyy-MM-dd");
+        const vd = toValidDate(d);
+        return vd ? format(vd, "yyyy-MM-dd") : null;
       };
 
       // Only mark day D if the algorithm recommends watering ON D specifically (i.e. D is the
