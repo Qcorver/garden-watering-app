@@ -42,6 +42,15 @@ interface PlantNetResult {
     scientificNameWithoutAuthor: string;
     commonNames: string[];
   };
+  /** Reference photos PlantNet matched against — used as a thumbnail fallback
+      when the species isn't in our own plant_species table. */
+  images?: Array<{ url?: { o?: string; m?: string; s?: string } }>;
+}
+
+/** Pick a PlantNet reference image (medium, else small) for a candidate. */
+function plantNetImageUrl(r: PlantNetResult): string | null {
+  const url = r.images?.[0]?.url;
+  return url?.m ?? url?.s ?? null;
 }
 
 interface Match {
@@ -336,7 +345,9 @@ Deno.serve(async (req) => {
         scientificName,
         commonName: dbRow?.commonName ?? plantNetCommonName,
         dbId: dbRow?.id ?? null,
-        imageUrl: dbRow?.imageUrl ?? null,
+        // Prefer our own curated image; fall back to PlantNet's reference photo
+        // so "not in database" candidates still show a thumbnail.
+        imageUrl: dbRow?.imageUrl ?? plantNetImageUrl(r),
         aiVerified: scientificName === aiPickName || undefined,
       };
     }),
