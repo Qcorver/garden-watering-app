@@ -148,8 +148,27 @@
   letter-spacing: 0.2px;
 }
 
-.onboarding-cat-card--dim {
-  opacity: 0.4;
+/* ── Slide 4: camera recognition chip ── */
+.onboarding-cam-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: center;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 100px;
+  padding: 8px 16px;
+  margin-bottom: 4px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  letter-spacing: 0.2px;
+}
+
+.onboarding-cam-chip-icon {
+  font-size: 16px;
+  line-height: 1;
 }
 
 /* ── Slide 3: calendar mockup ── */

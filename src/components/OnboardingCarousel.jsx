@@ -39,10 +39,10 @@ export function OnboardingCarousel({ onComplete, onRequestPush, onRequestLocatio
   ];
 
   const gardenTiles = [
-    [<img key="shears" src="/hedgetrimmer3.png" alt="" width="36" height="36" style={{ objectFit: "contain" }} />, lang === "nl" ? "Snoeien" : "Pruning", false],
-    ["🌱", "Wishlist", false],
-    ["🥕", lang === "nl" ? "Moestuin" : "Vegetables", true],
-    ["💬", lang === "nl" ? "AI Assistent" : "AI Assistant", true],
+    [<img key="shears" src="/hedgetrimmer3.png" alt="" width="36" height="36" style={{ objectFit: "contain" }} />, t(lang, "gardenTilePruning")],
+    ["🌱", t(lang, "gardenTileWishlist")],
+    ["🥕", t(lang, "gardenTileVegetable")],
+    ["💬", t(lang, "gardenTileAI")],
   ];
 
   return (
@@ -116,17 +116,21 @@ export function OnboardingCarousel({ onComplete, onRequestPush, onRequestLocatio
         {/* Slide 4: Mijn tuin */}
         <div className="onboarding-slide">
           <div className="onboarding-visual onboarding-visual--cats">
+            <div className="onboarding-cam-chip">
+              <span className="onboarding-cam-chip-icon">📷</span>
+              <span>{t(lang, "onboardingGardenCamChip")}</span>
+            </div>
             <div className="onboarding-cat-row">
-              {gardenTiles.slice(0, 2).map(([icon, label, dim]) => (
-                <div key={label} className={`onboarding-cat-card${dim ? " onboarding-cat-card--dim" : ""}`}>
+              {gardenTiles.slice(0, 2).map(([icon, label]) => (
+                <div key={label} className="onboarding-cat-card">
                   <span className="onboarding-cat-emoji">{icon}</span>
                   <span className="onboarding-cat-label">{label}</span>
                 </div>
               ))}
             </div>
             <div className="onboarding-cat-row">
-              {gardenTiles.slice(2).map(([icon, label, dim]) => (
-                <div key={label} className={`onboarding-cat-card${dim ? " onboarding-cat-card--dim" : ""}`}>
+              {gardenTiles.slice(2).map(([icon, label]) => (
+                <div key={label} className="onboarding-cat-card">
                   <span className="onboarding-cat-emoji">{icon}</span>
                   <span className="onboarding-cat-label">{label}</span>
                 </div>
